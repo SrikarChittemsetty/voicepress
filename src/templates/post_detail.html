@@ -6,6 +6,9 @@
   <article>
     <h1>{{ post.title }}</h1>
     <p>By {{ post.username }} on {{ post.created_at }}</p>
+    {% if post.tags %}
+      <p>Tags: {{ post.tags }}</p>
+    {% endif %}
     <p>{{ post.body }}</p>
   </article>
 {% endblock %}

@@ -16,6 +16,9 @@
           <h2>{{ post.title }}</h2>
           <p>{{ post.created_at }}</p>
           <p>{{ post.body | truncate(140, True, "...") }}</p>
+          {% if post.tags %}
+            <p>Tags: {{ post.tags }}</p>
+          {% endif %}
           <p><a href="{{ url_for('post_detail', post_id=post.id) }}">Read full post</a></p>
         </li>
       {% else %}
