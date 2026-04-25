@@ -38,6 +38,10 @@
                 <br>
                 <small>Tags: {{ post.tags }}</small>
               {% endif %}
+              {% if post.category and post.category.strip() %}
+                <br>
+                <small>Category: {{ post.category }}</small>
+              {% endif %}
             </td>
             <td><a href="{{ url_for('edit_post', post_id=post.id) }}">Edit</a></td>
             <td>

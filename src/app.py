@@ -71,6 +71,7 @@ def init_db() -> None:
             visibility TEXT NOT NULL DEFAULT 'public',
             status TEXT NOT NULL DEFAULT 'draft',
             tags TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT '',
             slug TEXT
         )
         """
@@ -113,6 +114,7 @@ def init_db() -> None:
     ensure_posts_tags_column(conn)
     ensure_posts_excerpt_column(conn)
     ensure_posts_cover_image_url_column(conn)
+    ensure_posts_category_column(conn)
     ensure_posts_slug_column(conn)
     ensure_posts_slug_unique_index(conn)
     backfill_post_slugs(conn)
@@ -157,6 +159,13 @@ def ensure_posts_cover_image_url_column(conn: sqlite3.Connection) -> None:
     has_cover_image_url_column = any(column["name"] == "cover_image_url" for column in columns)
     if not has_cover_image_url_column:
         conn.execute("ALTER TABLE posts ADD COLUMN cover_image_url TEXT NOT NULL DEFAULT ''")
+
+
+def ensure_posts_category_column(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
+    has_category_column = any(column["name"] == "category" for column in columns)
+    if not has_category_column:
+        conn.execute("ALTER TABLE posts ADD COLUMN category TEXT NOT NULL DEFAULT ''")
 
 
 def ensure_posts_slug_column(conn: sqlite3.Connection) -> None:
@@ -315,6 +324,7 @@ def create_post(
     visibility: str,
     status: str,
     tags: str,
+    category: str,
 ) -> bool:
     user = get_user_by_username(username)
     if not user:
@@ -325,10 +335,10 @@ def create_post(
     conn = get_db_connection()
     conn.execute(
         """
-        INSERT INTO posts (user_id, title, body, excerpt, cover_image_url, created_at, visibility, status, tags, slug)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO posts (user_id, title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category, slug)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (user["id"], title, body, excerpt, cover_image_url, created_at, visibility, status, tags, slug),
+        (user["id"], title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category, slug),
     )
     conn.commit()
     conn.close()
@@ -343,7 +353,7 @@ def get_posts_for_user(username: str) -> list[sqlite3.Row]:
     conn = get_db_connection()
     posts = conn.execute(
         """
-        SELECT id, title, body, excerpt, cover_image_url, created_at, visibility, status, tags
+        SELECT id, title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category
         FROM posts
         WHERE user_id = ?
         ORDER BY created_at DESC
@@ -365,6 +375,7 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
                    , posts.cover_image_url
                    , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
                    , posts.tags
+                   , posts.category
                    , posts.slug
                    , (
                        SELECT COUNT(*)
@@ -391,6 +402,7 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
                    , posts.cover_image_url
                    , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
                    , posts.tags
+                   , posts.category
                    , posts.slug
                    , (
                        SELECT COUNT(*)
@@ -423,7 +435,7 @@ def get_public_post_by_id(post_id: int) -> sqlite3.Row | None:
                posts.excerpt,
                posts.cover_image_url,
                COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name,
-               posts.tags, posts.slug,
+               posts.tags, posts.category, posts.slug,
                (
                    SELECT COUNT(*)
                    FROM likes
@@ -447,7 +459,7 @@ def get_public_post_by_slug(slug: str) -> sqlite3.Row | None:
                posts.excerpt,
                posts.cover_image_url,
                COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name,
-               posts.tags, posts.slug,
+               posts.tags, posts.category, posts.slug,
                (
                    SELECT COUNT(*)
                    FROM likes
@@ -471,7 +483,7 @@ def get_public_posts_for_username(username: str) -> list[sqlite3.Row] | None:
     conn = get_db_connection()
     posts = conn.execute(
         """
-        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.cover_image_url, posts.created_at, posts.tags, posts.slug,
+        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.cover_image_url, posts.created_at, posts.tags, posts.category, posts.slug,
                (
                    SELECT COUNT(*)
                    FROM comments
@@ -501,7 +513,7 @@ def get_public_posts_by_tag(tag: str) -> list[sqlite3.Row]:
     conn = get_db_connection()
     posts = conn.execute(
         """
-        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.cover_image_url, posts.created_at, posts.tags, posts.slug,
+        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.cover_image_url, posts.created_at, posts.tags, posts.category, posts.slug,
                (
                    SELECT COUNT(*)
                    FROM comments
@@ -527,11 +539,46 @@ def get_public_posts_by_tag(tag: str) -> list[sqlite3.Row]:
     return posts
 
 
+def get_public_posts_by_category(category: str) -> list[sqlite3.Row]:
+    normalized = category.strip()
+    if not normalized:
+        return []
+
+    conn = get_db_connection()
+    posts = conn.execute(
+        """
+        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.cover_image_url, posts.created_at, posts.tags, posts.category, posts.slug,
+               (
+                   SELECT COUNT(*)
+                   FROM comments
+                   WHERE comments.post_id = posts.id
+               ) AS comment_count,
+               (
+                   SELECT COUNT(*)
+                   FROM likes
+                   WHERE likes.post_id = posts.id
+               ) AS like_count,
+               users.username,
+               COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        WHERE posts.visibility = 'public'
+          AND posts.status = 'published'
+          AND TRIM(posts.category) != ''
+          AND LOWER(TRIM(posts.category)) = LOWER(?)
+        ORDER BY posts.created_at DESC
+        """,
+        (normalized,),
+    ).fetchall()
+    conn.close()
+    return posts
+
+
 def get_post_for_owner(post_id: int, username: str) -> sqlite3.Row | None:
     conn = get_db_connection()
     post = conn.execute(
         """
-        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.cover_image_url, posts.created_at, posts.visibility, posts.status, posts.tags, posts.slug
+        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.cover_image_url, posts.created_at, posts.visibility, posts.status, posts.tags, posts.category, posts.slug
         FROM posts
         JOIN users ON posts.user_id = users.id
         WHERE posts.id = ? AND users.username = ?
@@ -738,13 +785,14 @@ def update_post(
     visibility: str,
     status: str,
     tags: str,
+    category: str,
 ) -> bool:
     slug = generate_slug(title, exclude_post_id=post_id)
     conn = get_db_connection()
     result = conn.execute(
         """
         UPDATE posts
-        SET title = ?, body = ?, excerpt = ?, cover_image_url = ?, visibility = ?, status = ?, tags = ?, slug = ?
+        SET title = ?, body = ?, excerpt = ?, cover_image_url = ?, visibility = ?, status = ?, tags = ?, category = ?, slug = ?
         WHERE id = (
             SELECT posts.id
             FROM posts
@@ -752,7 +800,7 @@ def update_post(
             WHERE posts.id = ? AND users.username = ?
         )
         """,
-        (title, body, excerpt, cover_image_url, visibility, status, tags, slug, post_id, username),
+        (title, body, excerpt, cover_image_url, visibility, status, tags, category, slug, post_id, username),
     )
     conn.commit()
     conn.close()
@@ -827,6 +875,7 @@ def new_post():
         excerpt = request.form.get("excerpt", "").strip()
         cover_image_url = request.form.get("cover_image_url", "").strip()
         tags = request.form.get("tags", "").strip()
+        category = request.form.get("category", "").strip()
         visibility = request.form.get("visibility", "public")
         if visibility not in {"public", "private"}:
             visibility = "public"
@@ -847,6 +896,7 @@ def new_post():
             visibility,
             status,
             tags,
+            category,
         )
         flash("Post created.")
         return redirect(url_for("dashboard"))
@@ -981,6 +1031,7 @@ def edit_post(post_id: int):
         excerpt = request.form.get("excerpt", "").strip()
         cover_image_url = request.form.get("cover_image_url", "").strip()
         tags = request.form.get("tags", "").strip()
+        category = request.form.get("category", "").strip()
         visibility = request.form.get("visibility", "public")
         if visibility not in {"public", "private"}:
             visibility = "public"
@@ -1002,6 +1053,7 @@ def edit_post(post_id: int):
             visibility,
             status,
             tags,
+            category,
         )
         flash("Post updated.")
         return redirect(url_for("dashboard"))
@@ -1047,6 +1099,12 @@ def user_blog(username: str):
 def tag_posts(tag: str):
     posts = get_public_posts_by_tag(tag)
     return render_template("tag_posts.html", tag=tag, posts=posts)
+
+
+@app.route("/categories/<category>")
+def category_posts(category: str):
+    posts = get_public_posts_by_category(category)
+    return render_template("category_posts.html", category=category, posts=posts)
 
 
 @app.route("/profile", methods=["GET", "POST"])

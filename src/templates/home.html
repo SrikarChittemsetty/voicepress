@@ -31,6 +31,12 @@
           <p>{{ post.excerpt if post.excerpt else post.body | truncate(140, True, "...") }}</p>
           <p>{{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %}</p>
           <p>{{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}</p>
+          {% if post.category and post.category.strip() %}
+            <p>
+              Category:
+              <a href="{{ url_for('category_posts', category=post.category.strip()) }}">{{ post.category.strip() }}</a>
+            </p>
+          {% endif %}
           {% if post.tags %}
             <p>
               Tags:
