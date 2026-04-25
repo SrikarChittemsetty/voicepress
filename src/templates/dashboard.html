@@ -29,6 +29,10 @@
             <td>{{ post.status }}</td>
             <td>{{ post.created_at }}</td>
             <td>
+              {% if post.cover_image_url %}
+                <img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}">
+                <br>
+              {% endif %}
               {{ post.excerpt if post.excerpt else post.body | truncate(100, True, "...") }}
               {% if post.tags %}
                 <br>

@@ -5,6 +5,9 @@
 {% block content %}
   <article>
     <h1>{{ post.title }}</h1>
+    {% if post.cover_image_url %}
+      <p><img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}"></p>
+    {% endif %}
     <p>By <a href="{{ url_for('user_blog', username=post.username) }}">{{ post.display_name }}</a> on {{ post.created_at }}</p>
     {% if post.excerpt %}
       <p>{{ post.excerpt }}</p>
