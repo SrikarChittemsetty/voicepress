@@ -23,6 +23,14 @@
       </select>
     </div>
 
+    <div>
+      <label for="status">Status</label><br>
+      <select id="status" name="status">
+        <option value="draft" {% if post.status == "draft" %}selected{% endif %}>Draft</option>
+        <option value="published" {% if post.status == "published" %}selected{% endif %}>Published</option>
+      </select>
+    </div>
+
     <button type="submit">Save Changes</button>
   </form>
 {% endblock %}

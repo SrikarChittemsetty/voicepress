@@ -35,11 +35,13 @@ def init_db() -> None:
             title TEXT NOT NULL,
             body TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            visibility TEXT NOT NULL DEFAULT 'public'
+            visibility TEXT NOT NULL DEFAULT 'public',
+            status TEXT NOT NULL DEFAULT 'draft'
         )
         """
     )
     ensure_posts_visibility_column(conn)
+    ensure_posts_status_column(conn)
     conn.commit()
     conn.close()
 
@@ -51,6 +53,13 @@ def ensure_posts_visibility_column(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE posts ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'"
         )
+
+
+def ensure_posts_status_column(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
+    has_status_column = any(column["name"] == "status" for column in columns)
+    if not has_status_column:
+        conn.execute("ALTER TABLE posts ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'")
 
 
 def create_user(username: str, password: str) -> bool:
@@ -79,7 +88,9 @@ def get_user_by_username(username: str) -> sqlite3.Row | None:
     return user
 
 
-def create_post(username: str, title: str, body: str, visibility: str) -> bool:
+def create_post(
+    username: str, title: str, body: str, visibility: str, status: str
+) -> bool:
     user = get_user_by_username(username)
     if not user:
         return False
@@ -88,10 +99,10 @@ def create_post(username: str, title: str, body: str, visibility: str) -> bool:
     conn = get_db_connection()
     conn.execute(
         """
-        INSERT INTO posts (user_id, title, body, created_at, visibility)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO posts (user_id, title, body, created_at, visibility, status)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (user["id"], title, body, created_at, visibility),
+        (user["id"], title, body, created_at, visibility, status),
     )
     conn.commit()
     conn.close()
@@ -106,7 +117,7 @@ def get_posts_for_user(username: str) -> list[sqlite3.Row]:
     conn = get_db_connection()
     posts = conn.execute(
         """
-        SELECT id, title, body, created_at, visibility
+        SELECT id, title, body, created_at, visibility, status
         FROM posts
         WHERE user_id = ?
         ORDER BY created_at DESC
@@ -124,7 +135,7 @@ def get_public_posts() -> list[sqlite3.Row]:
         SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
         FROM posts
         JOIN users ON posts.user_id = users.id
-        WHERE posts.visibility = 'public'
+        WHERE posts.visibility = 'public' AND posts.status = 'published'
         ORDER BY posts.created_at DESC
         """
     ).fetchall()
@@ -139,7 +150,7 @@ def get_public_post_by_id(post_id: int) -> sqlite3.Row | None:
         SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
         FROM posts
         JOIN users ON posts.user_id = users.id
-        WHERE posts.id = ? AND posts.visibility = 'public'
+        WHERE posts.id = ? AND posts.visibility = 'public' AND posts.status = 'published'
         """,
         (post_id,),
     ).fetchone()
@@ -157,7 +168,7 @@ def get_public_posts_for_username(username: str) -> list[sqlite3.Row] | None:
         """
         SELECT id, title, body, created_at
         FROM posts
-        WHERE user_id = ? AND visibility = 'public'
+        WHERE user_id = ? AND visibility = 'public' AND status = 'published'
         ORDER BY created_at DESC
         """,
         (user["id"],),
@@ -170,7 +181,7 @@ def get_post_for_owner(post_id: int, username: str) -> sqlite3.Row | None:
     conn = get_db_connection()
     post = conn.execute(
         """
-        SELECT posts.id, posts.title, posts.body, posts.created_at, posts.visibility
+        SELECT posts.id, posts.title, posts.body, posts.created_at, posts.visibility, posts.status
         FROM posts
         JOIN users ON posts.user_id = users.id
         WHERE posts.id = ? AND users.username = ?
@@ -182,13 +193,13 @@ def get_post_for_owner(post_id: int, username: str) -> sqlite3.Row | None:
 
 
 def update_post(
-    post_id: int, username: str, title: str, body: str, visibility: str
+    post_id: int, username: str, title: str, body: str, visibility: str, status: str
 ) -> bool:
     conn = get_db_connection()
     result = conn.execute(
         """
         UPDATE posts
-        SET title = ?, body = ?, visibility = ?
+        SET title = ?, body = ?, visibility = ?, status = ?
         WHERE id = (
             SELECT posts.id
             FROM posts
@@ -196,7 +207,7 @@ def update_post(
             WHERE posts.id = ? AND users.username = ?
         )
         """,
-        (title, body, visibility, post_id, username),
+        (title, body, visibility, status, post_id, username),
     )
     conn.commit()
     conn.close()
@@ -268,12 +279,15 @@ def new_post():
         visibility = request.form.get("visibility", "public")
         if visibility not in {"public", "private"}:
             visibility = "public"
+        status = request.form.get("status", "draft")
+        if status not in {"draft", "published"}:
+            status = "draft"
 
         if not title or not body:
             flash("Title and body are required.")
             return redirect(url_for("new_post"))
 
-        create_post(session["username"], title, body, visibility)
+        create_post(session["username"], title, body, visibility, status)
         flash("Post created.")
         return redirect(url_for("dashboard"))
 
@@ -304,12 +318,15 @@ def edit_post(post_id: int):
         visibility = request.form.get("visibility", "public")
         if visibility not in {"public", "private"}:
             visibility = "public"
+        status = request.form.get("status", "draft")
+        if status not in {"draft", "published"}:
+            status = "draft"
 
         if not title or not body:
             flash("Title and body are required.")
             return redirect(url_for("edit_post", post_id=post_id))
 
-        update_post(post_id, username, title, body, visibility)
+        update_post(post_id, username, title, body, visibility, status)
         flash("Post updated.")
         return redirect(url_for("dashboard"))
 
