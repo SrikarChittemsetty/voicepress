@@ -44,7 +44,7 @@
           <p><a href="{{ url_for('post_detail', slug=post.slug) }}">Read full post</a></p>
         </li>
       {% else %}
-        <li>{{ profile.display_name }} has not published any public posts yet.</li>
+        <li><p class="empty-state">{{ profile.display_name }} has not published any public posts yet. When they publish something visible to everyone, it will show up here.</p></li>
       {% endfor %}
     </ul>
   </section>

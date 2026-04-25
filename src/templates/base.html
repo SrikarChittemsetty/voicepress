@@ -40,5 +40,19 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p class="site-footer-inner">
+        <strong>New Project Blog</strong>
+        <span class="site-footer-sep">·</span>
+        <a href="{{ url_for('home') }}">Home</a>
+        <span class="site-footer-sep">·</span>
+        <a href="{{ url_for('about') }}">About</a>
+        <span class="site-footer-sep">·</span>
+        <a href="{{ url_for('contact') }}">Contact</a>
+      </p>
+    </div>
+  </footer>
 </body>
 </html>

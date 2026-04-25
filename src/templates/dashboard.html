@@ -5,71 +5,122 @@
 {% block content %}
   <h1>Dashboard</h1>
   <p>Welcome, {{ username }}.</p>
-  <p><a href="{{ url_for('new_post') }}">Create new post</a></p>
+  <p><a class="btn" href="{{ url_for('new_post') }}">Create new post</a></p>
 
-  <section>
-    <h2>Your posts</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>Visibility</th>
-          <th>Status</th>
-          <th>Created</th>
-          <th>Preview</th>
-          <th>Edit</th>
-          <th>Delete</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for post in blog_posts %}
-          <tr>
-            <td>{{ post.title }}</td>
-            <td>{{ post.visibility }}</td>
-            <td>{{ post.status }}</td>
-            <td>{{ post.created_at }}</td>
-            <td>
-              {% if post.cover_image_url %}
-                <img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}">
-                <br>
-              {% endif %}
-              {{ post.excerpt if post.excerpt else post.body | truncate(100, True, "...") }}
-              {% if post.tags %}
-                <br>
-                <small>Tags: {{ post.tags }}</small>
-              {% endif %}
-              {% if post.category and post.category.strip() %}
-                <br>
-                <small>Category: {{ post.category }}</small>
-              {% endif %}
-            </td>
-            <td><a href="{{ url_for('edit_post', post_id=post.id) }}">Edit</a></td>
-            <td>
-              <form method="post" action="{{ url_for('delete_post_route', post_id=post.id) }}">
-                <button type="submit">Delete</button>
-              </form>
-            </td>
-          </tr>
-        {% else %}
-          <tr>
-            <td colspan="7">No posts yet.</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <section class="dashboard-stats" aria-label="Your writing stats">
+    <h2>At a glance</h2>
+    <ul class="stats-list">
+      <li><span class="stats-value">{{ dashboard_stats.total_posts }}</span> total posts</li>
+      <li><span class="stats-value">{{ dashboard_stats.published_count }}</span> published</li>
+      <li><span class="stats-value">{{ dashboard_stats.draft_count }}</span> drafts</li>
+      <li><span class="stats-value">{{ dashboard_stats.private_count }}</span> private</li>
+    </ul>
+    {% if dashboard_stats.bookmark_count > 0 %}
+      <p class="stats-bookmarks">You have saved <strong>{{ dashboard_stats.bookmark_count }}</strong> bookmarked post{% if dashboard_stats.bookmark_count != 1 %}s{% endif %} to read later.</p>
+    {% endif %}
   </section>
 
   <section>
-    <h2>Bookmarked Posts</h2>
-    <ul>
-      {% for post in bookmarked_posts %}
-        <li>
-          <a href="{{ url_for('post_detail', slug=post.slug) }}">{{ post.title }}</a>
-          by {{ post.display_name }} on {{ post.created_at }}
-        </li>
-      {% else %}
-        <li>No bookmarks yet.</li>
-      {% endfor %}
-    </ul>
+    <h2>Your posts</h2>
+    <nav class="dashboard-filters" aria-label="Filter your posts">
+      <span class="filter-label">Show:</span>
+      <a class="filter-pill{% if post_filter == 'all' %} is-active{% endif %}" href="{{ url_for('dashboard', filter='all') }}">All</a>
+      <a class="filter-pill{% if post_filter == 'published' %} is-active{% endif %}" href="{{ url_for('dashboard', filter='published') }}">Published</a>
+      <a class="filter-pill{% if post_filter == 'draft' %} is-active{% endif %}" href="{{ url_for('dashboard', filter='draft') }}">Drafts</a>
+      <a class="filter-pill{% if post_filter == 'public' %} is-active{% endif %}" href="{{ url_for('dashboard', filter='public') }}">Public</a>
+      <a class="filter-pill{% if post_filter == 'private' %} is-active{% endif %}" href="{{ url_for('dashboard', filter='private') }}">Private</a>
+    </nav>
+
+    {% if not blog_posts and dashboard_stats.total_posts == 0 %}
+      <p class="empty-state">You have not created any posts yet. Use <strong>Create new post</strong> above to write your first one.</p>
+    {% elif not blog_posts %}
+      <p class="empty-state">No posts match this filter. Try <a href="{{ url_for('dashboard', filter='all') }}">viewing all posts</a> or pick another filter.</p>
+    {% else %}
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Visibility</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Preview</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for post in blog_posts %}
+            <tr>
+              <td>{{ post.title }}</td>
+              <td>{{ post.visibility }}</td>
+              <td>{{ post.status }}</td>
+              <td>{{ post.created_at }}</td>
+              <td>
+                {% if post.cover_image_url %}
+                  <img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}">
+                  <br>
+                {% endif %}
+                {{ post.excerpt if post.excerpt else post.body | truncate(100, True, "...") }}
+                {% if post.tags %}
+                  <br>
+                  <small>Tags: {{ post.tags }}</small>
+                {% endif %}
+                {% if post.category and post.category.strip() %}
+                  <br>
+                  <small>Category: {{ post.category }}</small>
+                {% endif %}
+              </td>
+              <td class="table-actions">
+                <a class="btn btn-secondary btn-small" href="{{ url_for('edit_post', post_id=post.id) }}">Edit</a>
+                <form class="inline-delete-form" method="post" action="{{ url_for('delete_post_route', post_id=post.id) }}">
+                  <button class="btn btn-danger btn-small" type="submit">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Recent activity</h2>
+    <p class="section-lead">Latest comments on <em>your</em> posts (newest first).</p>
+    {% if recent_comments %}
+      <ul class="activity-list">
+        {% for row in recent_comments %}
+          <li class="activity-item">
+            <p class="activity-meta">
+              <strong>{{ row.commenter_display_name }}</strong>
+              <span class="activity-username">(@{{ row.commenter_username }})</span>
+              · {{ row.created_at }}
+            </p>
+            <p class="activity-post">
+              On:
+              <a href="{{ url_for('edit_post', post_id=row.post_id) }}">{{ row.post_title }}</a>
+              <span class="muted">(open in editor)</span>
+            </p>
+            <p class="activity-preview">{{ row.body | truncate(160, True, "...") }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state">No comments on your posts yet. When someone comments on a post you wrote, it will appear here.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Bookmarked posts</h2>
+    {% if bookmarked_posts %}
+      <ul>
+        {% for post in bookmarked_posts %}
+          <li>
+            <a href="{{ url_for('post_detail', slug=post.slug) }}">{{ post.title }}</a>
+            <span class="muted">by {{ post.display_name }} · {{ post.created_at }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty-state">You have not bookmarked any posts. Open a public post and use <strong>Bookmark</strong> to save it here.</p>
+    {% endif %}
   </section>
 {% endblock %}

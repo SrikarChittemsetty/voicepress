@@ -4,6 +4,9 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   line-height: 1.5;
   background: #f5f7fb;
@@ -47,6 +50,7 @@ a:hover {
 
 .page-content {
   padding: 1.6rem 0 2.5rem;
+  flex: 1;
 }
 
 h1,
@@ -79,6 +83,19 @@ form {
   border-radius: 10px;
   padding: 1rem;
   margin-top: 0.75rem;
+}
+
+form.form-compact {
+  display: inline-block;
+  width: auto;
+  max-width: none;
+  margin-top: 0.35rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.65rem;
+}
+
+form.form-compact button {
+  margin: 0;
 }
 
 label {
@@ -178,4 +195,229 @@ li {
 .markdown-preview-content p,
 .markdown-preview-content ul {
   margin: 0.45rem 0;
+}
+
+/* Buttons (and links styled as buttons) */
+a.btn {
+  display: inline-block;
+  text-align: center;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.5rem 0.95rem;
+  border-radius: 8px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+  background: #2563eb;
+  color: #fff !important;
+}
+
+.btn:hover {
+  background: #1d4ed8;
+  text-decoration: none;
+}
+
+.btn-secondary {
+  background: #fff;
+  color: #1d4ed8 !important;
+  border-color: #93c5fd;
+}
+
+.btn-secondary:hover {
+  background: #eff6ff;
+}
+
+.btn-danger {
+  background: #b91c1c;
+  color: #fff !important;
+}
+
+.btn-danger:hover {
+  background: #991b1b;
+}
+
+.btn-small {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.875rem;
+}
+
+.table-actions {
+  white-space: nowrap;
+}
+
+.table-actions .btn-small {
+  margin-right: 0.35rem;
+  margin-bottom: 0.25rem;
+  vertical-align: middle;
+}
+
+form.inline-delete-form {
+  display: inline-block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  vertical-align: middle;
+}
+
+form.inline-delete-form button {
+  margin: 0;
+}
+
+/* Site footer */
+.site-footer {
+  margin-top: auto;
+  padding: 1rem 0 1.35rem;
+  border-top: 1px solid #dbe3ef;
+  background: #ffffff;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+.site-footer-inner {
+  margin: 0;
+}
+
+.site-footer a {
+  font-weight: 600;
+}
+
+.site-footer-sep {
+  margin: 0 0.35rem;
+  color: #9ca3af;
+}
+
+/* Dashboard */
+.dashboard-stats {
+  background: #fff;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+}
+
+.stats-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+}
+
+.stats-list li {
+  margin: 0;
+}
+
+.stats-value {
+  font-weight: 800;
+  color: #111827;
+}
+
+.stats-bookmarks {
+  margin: 0.75rem 0 0;
+  padding-top: 0.65rem;
+  border-top: 1px dashed #dbe3ef;
+}
+
+.dashboard-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.65rem 0 1rem;
+}
+
+.filter-label {
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
+.filter-pill {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #c7d2e0;
+  background: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.filter-pill:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+  text-decoration: none;
+}
+
+.filter-pill.is-active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff !important;
+}
+
+.filter-pill.is-active:hover {
+  background: #1e40af;
+  border-color: #1e40af;
+}
+
+.section-lead {
+  margin-top: 0.35rem;
+  color: #4b5563;
+  font-size: 0.95rem;
+}
+
+.activity-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.activity-item {
+  background: #fff;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.65rem;
+}
+
+.activity-meta {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.activity-username {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.activity-post {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.activity-preview {
+  margin: 0;
+  color: #374151;
+}
+
+.empty-state {
+  margin: 0.75rem 0 0;
+  padding: 1rem 1.1rem;
+  border-radius: 10px;
+  border: 1px dashed #c7d2e0;
+  background: #f9fafb;
+  color: #374151;
+}
+
+.muted {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+td img {
+  max-width: 120px;
+  height: auto;
+  border-radius: 6px;
 }

@@ -17,7 +17,7 @@
     <form method="get" action="{{ url_for('home') }}">
       <label for="q">Search posts</label>
       <input id="q" name="q" type="text" value="{{ q }}" placeholder="Search title or body">
-      <button type="submit">Search</button>
+      <button class="btn" type="submit">Search</button>
     </form>
 
     <ul>
@@ -55,9 +55,9 @@
         </li>
       {% else %}
         {% if q %}
-          <li>No public published posts matched your search.</li>
+          <li><p class="empty-state">No public published posts matched your search. Try different words or <a href="{{ url_for('home') }}">clear the search</a>.</p></li>
         {% else %}
-          <li>No posts yet.</li>
+          <li><p class="empty-state">No public posts yet. Check back soon, or <a href="{{ url_for('register') }}">create an account</a> to start writing.</p></li>
         {% endif %}
       {% endfor %}
     </ul>

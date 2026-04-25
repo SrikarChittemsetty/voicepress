@@ -40,12 +40,12 @@
     <p>{{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}</p>
     {% if session.get("username") %}
       {% if is_liked %}
-        <form method="post" action="{{ url_for('unlike_post', post_id=post.id) }}">
-          <button type="submit">Unlike</button>
+        <form class="form-compact" method="post" action="{{ url_for('unlike_post', post_id=post.id) }}">
+          <button class="btn btn-secondary" type="submit">Unlike</button>
         </form>
       {% else %}
-        <form method="post" action="{{ url_for('like_post', post_id=post.id) }}">
-          <button type="submit">Like</button>
+        <form class="form-compact" method="post" action="{{ url_for('like_post', post_id=post.id) }}">
+          <button class="btn btn-secondary" type="submit">Like</button>
         </form>
       {% endif %}
     {% else %}
@@ -57,12 +57,12 @@
     <h2>Bookmark</h2>
     {% if session.get("username") %}
       {% if is_bookmarked %}
-        <form method="post" action="{{ url_for('unbookmark_post', post_id=post.id) }}">
-          <button type="submit">Remove Bookmark</button>
+        <form class="form-compact" method="post" action="{{ url_for('unbookmark_post', post_id=post.id) }}">
+          <button class="btn btn-secondary" type="submit">Remove bookmark</button>
         </form>
       {% else %}
-        <form method="post" action="{{ url_for('bookmark_post', post_id=post.id) }}">
-          <button type="submit">Bookmark Post</button>
+        <form class="form-compact" method="post" action="{{ url_for('bookmark_post', post_id=post.id) }}">
+          <button class="btn btn-secondary" type="submit">Bookmark</button>
         </form>
       {% endif %}
     {% else %}
@@ -77,7 +77,7 @@
       <form method="post" action="{{ url_for('post_detail', slug=post.slug) }}">
         <label for="comment-body">Add a comment</label><br>
         <textarea id="comment-body" name="body" rows="4" cols="60" required></textarea>
-        <button type="submit">Post Comment</button>
+        <button class="btn" type="submit">Post comment</button>
       </form>
     {% else %}
       <p><a href="{{ url_for('login') }}">Log in</a> to comment.</p>
@@ -89,13 +89,13 @@
           <p><strong>{{ comment.display_name }}</strong> (@{{ comment.username }}) on {{ comment.created_at }}</p>
           <p>{{ comment.body }}</p>
           {% if session.get("username") == comment.username %}
-            <form method="post" action="{{ url_for('delete_comment_route', comment_id=comment.id) }}">
-              <button type="submit">Delete Comment</button>
+            <form class="form-compact" method="post" action="{{ url_for('delete_comment_route', comment_id=comment.id) }}">
+              <button class="btn btn-danger btn-small" type="submit">Delete comment</button>
             </form>
           {% endif %}
         </li>
       {% else %}
-        <li>No comments yet.</li>
+        <li><p class="empty-state">No comments yet. Be the first to start the conversation.</p></li>
       {% endfor %}
     </ul>
   </section>

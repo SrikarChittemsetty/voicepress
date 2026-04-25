@@ -345,23 +345,109 @@ def create_post(
     return True
 
 
-def get_posts_for_user(username: str) -> list[sqlite3.Row]:
+DASHBOARD_POST_FILTERS = frozenset({"all", "published", "draft", "public", "private"})
+
+
+def get_posts_for_user(username: str, post_filter: str = "all") -> list[sqlite3.Row]:
+    """Return posts owned by username, optionally filtered (all, published, draft, public, private)."""
     user = get_user_by_username(username)
     if not user:
         return []
 
+    normalized = (post_filter or "all").strip().lower()
+    if normalized not in DASHBOARD_POST_FILTERS:
+        normalized = "all"
+
+    extra_where = ""
+    if normalized == "published":
+        extra_where = " AND status = 'published'"
+    elif normalized == "draft":
+        extra_where = " AND status = 'draft'"
+    elif normalized == "public":
+        extra_where = " AND visibility = 'public'"
+    elif normalized == "private":
+        extra_where = " AND visibility = 'private'"
+
     conn = get_db_connection()
     posts = conn.execute(
-        """
+        f"""
         SELECT id, title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category
         FROM posts
-        WHERE user_id = ?
+        WHERE user_id = ?{extra_where}
         ORDER BY created_at DESC
         """,
         (user["id"],),
     ).fetchall()
     conn.close()
     return posts
+
+
+def get_dashboard_stats(username: str) -> dict[str, int]:
+    """Counts for the dashboard stats strip (owner posts + bookmarks)."""
+    user = get_user_by_username(username)
+    if not user:
+        return {
+            "total_posts": 0,
+            "published_count": 0,
+            "draft_count": 0,
+            "private_count": 0,
+            "bookmark_count": 0,
+        }
+
+    conn = get_db_connection()
+    row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS total_posts,
+            COALESCE(SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END), 0) AS published_count,
+            COALESCE(SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END), 0) AS draft_count,
+            COALESCE(SUM(CASE WHEN visibility = 'private' THEN 1 ELSE 0 END), 0) AS private_count
+        FROM posts
+        WHERE user_id = ?
+        """,
+        (user["id"],),
+    ).fetchone()
+    bookmark_row = conn.execute(
+        "SELECT COUNT(*) AS bookmark_count FROM bookmarks WHERE user_id = ?",
+        (user["id"],),
+    ).fetchone()
+    conn.close()
+    return {
+        "total_posts": int(row["total_posts"] or 0),
+        "published_count": int(row["published_count"] or 0),
+        "draft_count": int(row["draft_count"] or 0),
+        "private_count": int(row["private_count"] or 0),
+        "bookmark_count": int(bookmark_row["bookmark_count"] or 0),
+    }
+
+
+def get_recent_comments_on_user_posts(username: str, limit: int = 12) -> list[sqlite3.Row]:
+    """Recent comments left on posts owned by this user (newest first)."""
+    user = get_user_by_username(username)
+    if not user:
+        return []
+
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT comments.id,
+               comments.body,
+               comments.created_at,
+               commenters.username AS commenter_username,
+               COALESCE(NULLIF(commenters.display_name, ''), commenters.username) AS commenter_display_name,
+               posts.id AS post_id,
+               posts.title AS post_title
+        FROM comments
+        JOIN posts ON comments.post_id = posts.id
+        JOIN users AS commenters ON comments.user_id = commenters.id
+        WHERE posts.user_id = ?
+        ORDER BY comments.created_at DESC
+        LIMIT ?
+        """,
+        (user["id"], limit),
+    ).fetchall()
+    conn.close()
+    return rows
 
 
 def get_public_posts(query: str = "") -> list[sqlite3.Row]:
@@ -856,11 +942,24 @@ def features():
 def dashboard():
     if not is_logged_in():
         return redirect(url_for("login"))
+
+    username = session["username"]
+    post_filter = (request.args.get("filter") or "all").strip().lower()
+    if post_filter not in DASHBOARD_POST_FILTERS:
+        post_filter = "all"
+
+    stats = get_dashboard_stats(username)
+    blog_posts = get_posts_for_user(username, post_filter)
+    recent_comments = get_recent_comments_on_user_posts(username)
+
     return render_template(
         "dashboard.html",
-        username=session["username"],
-        blog_posts=get_posts_for_user(session["username"]),
-        bookmarked_posts=get_bookmarked_posts_for_user(session["username"]),
+        username=username,
+        blog_posts=blog_posts,
+        bookmarked_posts=get_bookmarked_posts_for_user(username),
+        dashboard_stats=stats,
+        post_filter=post_filter,
+        recent_comments=recent_comments,
     )
 
 
