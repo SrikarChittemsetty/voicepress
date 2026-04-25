@@ -117,13 +117,14 @@ def get_posts_for_user(username: str) -> list[sqlite3.Row]:
     return posts
 
 
-def get_all_posts() -> list[sqlite3.Row]:
+def get_public_posts() -> list[sqlite3.Row]:
     conn = get_db_connection()
     posts = conn.execute(
         """
         SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
         FROM posts
         JOIN users ON posts.user_id = users.id
+        WHERE posts.visibility = 'public'
         ORDER BY posts.created_at DESC
         """
     ).fetchall()
@@ -155,7 +156,7 @@ init_db()
 
 @app.route("/")
 def home() -> str:
-    return render_template("home.html", posts=get_all_posts())
+    return render_template("home.html", posts=get_public_posts())
 
 
 @app.route("/about")
