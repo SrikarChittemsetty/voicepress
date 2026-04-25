@@ -128,17 +128,33 @@ def get_posts_for_user(username: str) -> list[sqlite3.Row]:
     return posts
 
 
-def get_public_posts() -> list[sqlite3.Row]:
+def get_public_posts(query: str = "") -> list[sqlite3.Row]:
+    query = query.strip()
     conn = get_db_connection()
-    posts = conn.execute(
-        """
-        SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
-        FROM posts
-        JOIN users ON posts.user_id = users.id
-        WHERE posts.visibility = 'public' AND posts.status = 'published'
-        ORDER BY posts.created_at DESC
-        """
-    ).fetchall()
+    if not query:
+        posts = conn.execute(
+            """
+            SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
+            FROM posts
+            JOIN users ON posts.user_id = users.id
+            WHERE posts.visibility = 'public' AND posts.status = 'published'
+            ORDER BY posts.created_at DESC
+            """
+        ).fetchall()
+    else:
+        like_query = f"%{query}%"
+        posts = conn.execute(
+            """
+            SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
+            FROM posts
+            JOIN users ON posts.user_id = users.id
+            WHERE posts.visibility = 'public'
+              AND posts.status = 'published'
+              AND (posts.title LIKE ? OR posts.body LIKE ?)
+            ORDER BY posts.created_at DESC
+            """,
+            (like_query, like_query),
+        ).fetchall()
     conn.close()
     return posts
 
@@ -242,7 +258,8 @@ init_db()
 
 @app.route("/")
 def home() -> str:
-    return render_template("home.html", posts=get_public_posts())
+    q = request.args.get("q", "").strip()
+    return render_template("home.html", posts=get_public_posts(q), q=q)
 
 
 @app.route("/about")
