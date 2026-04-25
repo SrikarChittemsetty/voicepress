@@ -12,6 +12,8 @@ license = { text = "MIT" }
 authors = [{ name = "Your Name" }]
 dependencies = [
   "flask>=3.0.0",
+  "markdown",
+  "bleach",
 ]
 
 [project.optional-dependencies]

@@ -2,7 +2,10 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+import bleach
+import markdown
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from markupsafe import Markup
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
@@ -14,6 +17,31 @@ def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def render_markdown(text: str) -> Markup:
+    raw_html = markdown.markdown(text or "")
+    clean_html = bleach.clean(
+        raw_html,
+        tags=[
+            "p",
+            "h1",
+            "h2",
+            "h3",
+            "strong",
+            "em",
+            "ul",
+            "ol",
+            "li",
+            "a",
+            "blockquote",
+            "code",
+            "pre",
+            "br",
+        ],
+        attributes={"a": ["href", "title"]},
+    )
+    return Markup(clean_html)
 
 
 def init_db() -> None:
@@ -355,6 +383,7 @@ def is_logged_in() -> bool:
 
 
 init_db()
+app.add_template_filter(render_markdown, "markdown")
 
 
 @app.route("/")

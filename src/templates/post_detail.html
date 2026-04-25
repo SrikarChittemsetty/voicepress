@@ -20,6 +20,6 @@
         {% endfor %}
       </p>
     {% endif %}
-    <p>{{ post.body }}</p>
+    <div>{{ post.body | markdown }}</div>
   </article>
 {% endblock %}
