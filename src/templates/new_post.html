@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}New Post - New Project Blog{% endblock %}
+
+{% block content %}
+  <h1>Create New Post</h1>
+  <form method="post" action="{{ url_for('new_post') }}">
+    <div>
+      <label for="title">Title</label><br>
+      <input type="text" id="title" name="title" required>
+    </div>
+
+    <div>
+      <label for="body">Body</label><br>
+      <textarea id="body" name="body" rows="10" cols="60" required></textarea>
+    </div>
+
+    <button type="submit">Save Post</button>
+  </form>
+{% endblock %}

@@ -1,8 +1,9 @@
-from flask import Flask, redirect, render_template, request, session, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"
 registered_users: dict[str, str] = {}
+blog_posts: list[dict[str, str]] = []
 
 
 def is_logged_in() -> bool:
@@ -30,7 +31,37 @@ def features():
 def dashboard():
     if not is_logged_in():
         return redirect(url_for("login"))
-    return render_template("dashboard.html", username=session["username"])
+    return render_template(
+        "dashboard.html",
+        username=session["username"],
+        blog_posts=blog_posts,
+    )
+
+
+@app.route("/posts/new", methods=["GET", "POST"])
+def new_post():
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+
+        if not title or not body:
+            flash("Title and body are required.")
+            return redirect(url_for("new_post"))
+
+        blog_posts.append(
+            {
+                "title": title,
+                "body": body,
+                "username": session["username"],
+            }
+        )
+        flash("Post created.")
+        return redirect(url_for("dashboard"))
+
+    return render_template("new_post.html")
 
 
 @app.route("/contact")
@@ -69,7 +100,8 @@ def submit_login() -> str:
         session["username"] = username
         return redirect(url_for("dashboard"))
 
-    return "Invalid username or password"
+    flash("Invalid username or password.")
+    return redirect(url_for("login"))
 
 
 @app.route("/logout")
