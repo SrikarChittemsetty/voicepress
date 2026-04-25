@@ -50,4 +50,18 @@
       </tbody>
     </table>
   </section>
+
+  <section>
+    <h2>Bookmarked Posts</h2>
+    <ul>
+      {% for post in bookmarked_posts %}
+        <li>
+          <a href="{{ url_for('post_detail', post_id=post.id) }}">{{ post.title }}</a>
+          by {{ post.display_name }} on {{ post.created_at }}
+        </li>
+      {% else %}
+        <li>No bookmarks yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
 {% endblock %}

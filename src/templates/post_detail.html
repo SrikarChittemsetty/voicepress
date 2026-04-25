@@ -24,6 +24,23 @@
   </article>
 
   <section>
+    <h2>Bookmark</h2>
+    {% if session.get("username") %}
+      {% if is_bookmarked %}
+        <form method="post" action="{{ url_for('unbookmark_post', post_id=post.id) }}">
+          <button type="submit">Remove Bookmark</button>
+        </form>
+      {% else %}
+        <form method="post" action="{{ url_for('bookmark_post', post_id=post.id) }}">
+          <button type="submit">Bookmark Post</button>
+        </form>
+      {% endif %}
+    {% else %}
+      <p><a href="{{ url_for('login') }}">Log in</a> to bookmark this post.</p>
+    {% endif %}
+  </section>
+
+  <section>
     <h2>Comments</h2>
 
     {% if session.get("username") %}
