@@ -166,6 +166,62 @@ def get_public_posts_for_username(username: str) -> list[sqlite3.Row] | None:
     return posts
 
 
+def get_post_for_owner(post_id: int, username: str) -> sqlite3.Row | None:
+    conn = get_db_connection()
+    post = conn.execute(
+        """
+        SELECT posts.id, posts.title, posts.body, posts.created_at, posts.visibility
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        WHERE posts.id = ? AND users.username = ?
+        """,
+        (post_id, username),
+    ).fetchone()
+    conn.close()
+    return post
+
+
+def update_post(
+    post_id: int, username: str, title: str, body: str, visibility: str
+) -> bool:
+    conn = get_db_connection()
+    result = conn.execute(
+        """
+        UPDATE posts
+        SET title = ?, body = ?, visibility = ?
+        WHERE id = (
+            SELECT posts.id
+            FROM posts
+            JOIN users ON posts.user_id = users.id
+            WHERE posts.id = ? AND users.username = ?
+        )
+        """,
+        (title, body, visibility, post_id, username),
+    )
+    conn.commit()
+    conn.close()
+    return result.rowcount > 0
+
+
+def delete_post(post_id: int, username: str) -> bool:
+    conn = get_db_connection()
+    result = conn.execute(
+        """
+        DELETE FROM posts
+        WHERE id = (
+            SELECT posts.id
+            FROM posts
+            JOIN users ON posts.user_id = users.id
+            WHERE posts.id = ? AND users.username = ?
+        )
+        """,
+        (post_id, username),
+    )
+    conn.commit()
+    conn.close()
+    return result.rowcount > 0
+
+
 def is_logged_in() -> bool:
     return "username" in session
 
@@ -230,6 +286,47 @@ def post_detail(post_id: int):
     if not post:
         abort(404)
     return render_template("post_detail.html", post=post)
+
+
+@app.route("/posts/<int:post_id>/edit", methods=["GET", "POST"])
+def edit_post(post_id: int):
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    username = session["username"]
+    post = get_post_for_owner(post_id, username)
+    if not post:
+        abort(404)
+
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+        visibility = request.form.get("visibility", "public")
+        if visibility not in {"public", "private"}:
+            visibility = "public"
+
+        if not title or not body:
+            flash("Title and body are required.")
+            return redirect(url_for("edit_post", post_id=post_id))
+
+        update_post(post_id, username, title, body, visibility)
+        flash("Post updated.")
+        return redirect(url_for("dashboard"))
+
+    return render_template("edit_post.html", post=post)
+
+
+@app.route("/posts/<int:post_id>/delete", methods=["POST"])
+def delete_post_route(post_id: int):
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    username = session["username"]
+    if not delete_post(post_id, username):
+        abort(404)
+
+    flash("Post deleted.")
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/users/<username>")
