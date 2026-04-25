@@ -513,6 +513,59 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
     return posts
 
 
+def get_popular_public_posts(limit: int = 5) -> list[sqlite3.Row]:
+    """Public published posts ranked by likes, then comments (tie-break: newer first)."""
+    conn = get_db_connection()
+    posts = conn.execute(
+        """
+        SELECT posts.id,
+               posts.title,
+               posts.slug,
+               posts.created_at,
+               users.username,
+               COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name,
+               (
+                   SELECT COUNT(*)
+                   FROM comments
+                   WHERE comments.post_id = posts.id
+               ) AS comment_count,
+               (
+                   SELECT COUNT(*)
+                   FROM likes
+                   WHERE likes.post_id = posts.id
+               ) AS like_count
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        WHERE posts.visibility = 'public' AND posts.status = 'published'
+        ORDER BY like_count DESC, comment_count DESC, posts.created_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return posts
+
+
+def get_authors_with_public_posts() -> list[sqlite3.Row]:
+    """Users who have at least one public, published post, with counts for the directory."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT users.username,
+               COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name,
+               users.bio,
+               COUNT(posts.id) AS public_post_count
+        FROM users
+        JOIN posts ON posts.user_id = users.id
+        WHERE posts.visibility = 'public' AND posts.status = 'published'
+        GROUP BY users.id, users.username, users.display_name, users.bio
+        ORDER BY display_name COLLATE NOCASE ASC, users.username COLLATE NOCASE ASC
+        """
+    ).fetchall()
+    conn.close()
+    return rows
+
+
 def get_public_post_by_id(post_id: int) -> sqlite3.Row | None:
     conn = get_db_connection()
     post = conn.execute(
@@ -923,7 +976,17 @@ app.add_template_filter(render_markdown, "markdown")
 @app.route("/")
 def home() -> str:
     q = request.args.get("q", "").strip()
-    return render_template("home.html", posts=get_public_posts(q), q=q)
+    return render_template(
+        "home.html",
+        posts=get_public_posts(q),
+        q=q,
+        popular_posts=get_popular_public_posts(5),
+    )
+
+
+@app.route("/authors")
+def authors():
+    return render_template("authors.html", authors=get_authors_with_public_posts())
 
 
 @app.route("/about")

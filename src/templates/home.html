@@ -12,8 +12,9 @@
     <p>Create an account or log in to access your writing dashboard.</p>
   {% endif %}
 
-  <section>
-    <h2>Recent Posts</h2>
+  <section class="home-recent" aria-labelledby="recent-heading">
+    <h2 id="recent-heading">Recent posts</h2>
+    <p class="section-lead">Latest public published posts, newest first. Use search to filter by title, body, or tags.</p>
     <form method="get" action="{{ url_for('home') }}">
       <label for="q">Search posts</label>
       <input id="q" name="q" type="text" value="{{ q }}" placeholder="Search title or body">
@@ -61,5 +62,26 @@
         {% endif %}
       {% endfor %}
     </ul>
+  </section>
+
+  <section class="home-popular" aria-labelledby="popular-heading">
+    <h2 id="popular-heading">Popular posts</h2>
+    <p class="section-lead">Top 5 public posts by likes, then comments (ties favor newer posts).</p>
+    {% if popular_posts %}
+      <ol class="popular-posts-list">
+        {% for post in popular_posts %}
+          <li>
+            <a href="{{ url_for('post_detail', slug=post.slug) }}">{{ post.title }}</a>
+            <span class="popular-posts-meta muted">
+              by {{ post.display_name }}
+              · {{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}
+              · {{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %}
+            </span>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p class="empty-state">No popular posts yet. Likes and comments will fill this list as readers engage.</p>
+    {% endif %}
   </section>
 {% endblock %}

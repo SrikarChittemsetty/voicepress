@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Authors - New Project Blog{% endblock %}
+
+{% block content %}
+  <h1>Authors</h1>
+  <p class="section-lead">People who have published at least one public post. Follow a name to read their blog.</p>
+
+  {% if authors %}
+    <ul class="author-directory">
+      {% for author in authors %}
+        <li class="author-card">
+          <h2 class="author-card-title">
+            <a href="{{ url_for('user_blog', username=author.username) }}">{{ author.display_name }}</a>
+          </h2>
+          <p class="author-card-handle">@{{ author.username }}</p>
+          {% if author.bio and author.bio.strip() %}
+            <p class="author-card-bio">{{ author.bio | truncate(160, True, "...") }}</p>
+          {% else %}
+            <p class="author-card-bio muted">No bio yet.</p>
+          {% endif %}
+          <p class="author-card-meta">
+            <strong>{{ author.public_post_count }}</strong> public post{% if author.public_post_count != 1 %}s{% endif %}
+            · <a href="{{ url_for('user_blog', username=author.username) }}">View blog</a>
+          </p>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty-state">No authors yet. When someone publishes a public post, they will appear here.</p>
+  {% endif %}
+{% endblock %}

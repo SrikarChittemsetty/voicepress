@@ -1,19 +1,30 @@
 {% extends "base.html" %}
 
-{% block title %}{{ profile.display_name }}'s Public Posts - New Project Blog{% endblock %}
+{% block title %}{{ profile.display_name }} (@{{ profile.username }}) - New Project Blog{% endblock %}
 
 {% block content %}
-  <h1>{{ profile.display_name }}'s Public Posts</h1>
-  <p>@{{ profile.username }}</p>
-  {% if profile.bio %}
-    <p>{{ profile.bio }}</p>
-  {% endif %}
+  <header class="author-blog-header">
+    <h1 class="author-blog-title">{{ profile.display_name }}</h1>
+    <p class="author-blog-handle">@{{ profile.username }}</p>
+    <p class="author-blog-stats">
+      <strong>{{ posts | length }}</strong> public post{% if (posts | length) != 1 %}s{% endif %} on this blog
+    </p>
+    {% if profile.bio and profile.bio.strip() %}
+      <div class="author-blog-bio">
+        <h2 class="visually-hidden">About</h2>
+        <p>{{ profile.bio }}</p>
+      </div>
+    {% else %}
+      <p class="muted">This author has not added a bio yet.</p>
+    {% endif %}
+  </header>
 
-  <section>
+  <section aria-labelledby="posts-heading">
+    <h2 id="posts-heading">Posts</h2>
     <ul>
       {% for post in posts %}
         <li>
-          <h2>{{ post.title }}</h2>
+          <h3>{{ post.title }}</h3>
           {% if post.cover_image_url %}
             <p><img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}"></p>
           {% endif %}
