@@ -263,6 +263,31 @@ def get_public_posts_for_username(username: str) -> list[sqlite3.Row] | None:
     return posts
 
 
+def get_public_posts_by_tag(tag: str) -> list[sqlite3.Row]:
+    normalized_tag = tag.strip().lower().replace(" ", "")
+    if not normalized_tag:
+        return []
+
+    like_tag = f"%,{normalized_tag},%"
+    conn = get_db_connection()
+    posts = conn.execute(
+        """
+        SELECT posts.id, posts.title, posts.body, posts.created_at, posts.tags,
+               users.username,
+               COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        WHERE posts.visibility = 'public'
+          AND posts.status = 'published'
+          AND (',' || REPLACE(LOWER(posts.tags), ' ', '') || ',') LIKE ?
+        ORDER BY posts.created_at DESC
+        """,
+        (like_tag,),
+    ).fetchall()
+    conn.close()
+    return posts
+
+
 def get_post_for_owner(post_id: int, username: str) -> sqlite3.Row | None:
     conn = get_db_connection()
     post = conn.execute(
@@ -448,6 +473,12 @@ def user_blog(username: str):
         abort(404)
     posts = get_public_posts_for_username(username)
     return render_template("user_blog.html", profile=profile, posts=posts)
+
+
+@app.route("/tags/<tag>")
+def tag_posts(tag: str):
+    posts = get_public_posts_by_tag(tag)
+    return render_template("tag_posts.html", tag=tag, posts=posts)
 
 
 @app.route("/profile", methods=["GET", "POST"])
