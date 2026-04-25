@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}{{ username }}'s Public Posts - New Project Blog{% endblock %}
+{% block title %}{{ profile.display_name }}'s Public Posts - New Project Blog{% endblock %}
 
 {% block content %}
-  <h1>{{ username }}'s Public Posts</h1>
+  <h1>{{ profile.display_name }}'s Public Posts</h1>
+  <p>@{{ profile.username }}</p>
+  {% if profile.bio %}
+    <p>{{ profile.bio }}</p>
+  {% endif %}
 
   <section>
     <ul>
@@ -15,7 +19,7 @@
           <p><a href="{{ url_for('post_detail', post_id=post.id) }}">Read full post</a></p>
         </li>
       {% else %}
-        <li>{{ username }} has not published any public posts yet.</li>
+        <li>{{ profile.display_name }} has not published any public posts yet.</li>
       {% endfor %}
     </ul>
   </section>

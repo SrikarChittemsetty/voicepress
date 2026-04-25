@@ -23,7 +23,9 @@ def init_db() -> None:
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL
+            password_hash TEXT NOT NULL,
+            display_name TEXT NOT NULL DEFAULT '',
+            bio TEXT NOT NULL DEFAULT ''
         )
         """
     )
@@ -42,6 +44,8 @@ def init_db() -> None:
     )
     ensure_posts_visibility_column(conn)
     ensure_posts_status_column(conn)
+    ensure_users_display_name_column(conn)
+    ensure_users_bio_column(conn)
     conn.commit()
     conn.close()
 
@@ -62,13 +66,30 @@ def ensure_posts_status_column(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE posts ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'")
 
 
+def ensure_users_display_name_column(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(users)").fetchall()
+    has_display_name_column = any(column["name"] == "display_name" for column in columns)
+    if not has_display_name_column:
+        conn.execute("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''")
+
+
+def ensure_users_bio_column(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(users)").fetchall()
+    has_bio_column = any(column["name"] == "bio" for column in columns)
+    if not has_bio_column:
+        conn.execute("ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT ''")
+
+
 def create_user(username: str, password: str) -> bool:
     password_hash = generate_password_hash(password)
     conn = get_db_connection()
     try:
         conn.execute(
-            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-            (username, password_hash),
+            """
+            INSERT INTO users (username, password_hash, display_name, bio)
+            VALUES (?, ?, ?, ?)
+            """,
+            (username, password_hash, username, ""),
         )
         conn.commit()
         return True
@@ -81,11 +102,45 @@ def create_user(username: str, password: str) -> bool:
 def get_user_by_username(username: str) -> sqlite3.Row | None:
     conn = get_db_connection()
     user = conn.execute(
-        "SELECT id, username, password_hash FROM users WHERE username = ?",
+        """
+        SELECT id, username, password_hash, display_name, bio
+        FROM users
+        WHERE username = ?
+        """,
         (username,),
     ).fetchone()
     conn.close()
     return user
+
+
+def update_profile(username: str, display_name: str, bio: str) -> bool:
+    display_name = display_name.strip() or username
+    bio = bio.strip()
+    conn = get_db_connection()
+    result = conn.execute(
+        "UPDATE users SET display_name = ?, bio = ? WHERE username = ?",
+        (display_name, bio, username),
+    )
+    conn.commit()
+    conn.close()
+    return result.rowcount > 0
+
+
+def get_public_profile(username: str) -> sqlite3.Row | None:
+    conn = get_db_connection()
+    profile = conn.execute(
+        """
+        SELECT
+            username,
+            COALESCE(NULLIF(display_name, ''), username) AS display_name,
+            bio
+        FROM users
+        WHERE username = ?
+        """,
+        (username,),
+    ).fetchone()
+    conn.close()
+    return profile
 
 
 def create_post(
@@ -135,6 +190,7 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
         posts = conn.execute(
             """
             SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
+                   , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
             FROM posts
             JOIN users ON posts.user_id = users.id
             WHERE posts.visibility = 'public' AND posts.status = 'published'
@@ -146,6 +202,7 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
         posts = conn.execute(
             """
             SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
+                   , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
             FROM posts
             JOIN users ON posts.user_id = users.id
             WHERE posts.visibility = 'public'
@@ -163,7 +220,8 @@ def get_public_post_by_id(post_id: int) -> sqlite3.Row | None:
     conn = get_db_connection()
     post = conn.execute(
         """
-        SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
+        SELECT posts.id, posts.title, posts.body, posts.created_at, users.username,
+               COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
         FROM posts
         JOIN users ON posts.user_id = users.id
         WHERE posts.id = ? AND posts.visibility = 'public' AND posts.status = 'published'
@@ -365,10 +423,31 @@ def delete_post_route(post_id: int):
 
 @app.route("/users/<username>")
 def user_blog(username: str):
-    posts = get_public_posts_for_username(username)
-    if posts is None:
+    profile = get_public_profile(username)
+    if profile is None:
         abort(404)
-    return render_template("user_blog.html", username=username, posts=posts)
+    posts = get_public_posts_for_username(username)
+    return render_template("user_blog.html", profile=profile, posts=posts)
+
+
+@app.route("/profile", methods=["GET", "POST"])
+def profile():
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    username = session["username"]
+    user = get_user_by_username(username)
+    if not user:
+        abort(404)
+
+    if request.method == "POST":
+        display_name = request.form.get("display_name", "").strip()
+        bio = request.form.get("bio", "")
+        update_profile(username, display_name, bio)
+        flash("Profile updated.")
+        return redirect(url_for("profile"))
+
+    return render_template("profile.html", user=user)
 
 
 @app.route("/contact")

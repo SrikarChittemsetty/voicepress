@@ -16,6 +16,7 @@
 
         {% if session.get("username") %}
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('profile') }}">Profile</a>
           <a href="{{ url_for('features') }}">Features</a>
           <span class="user-badge">Logged in as {{ session["username"] }}</span>
           <a href="{{ url_for('logout') }}">Logout</a>
