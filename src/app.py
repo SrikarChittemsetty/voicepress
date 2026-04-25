@@ -71,6 +71,17 @@ def init_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS comments (
+            id INTEGER PRIMARY KEY,
+            post_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     ensure_posts_visibility_column(conn)
     ensure_posts_status_column(conn)
     ensure_posts_tags_column(conn)
@@ -331,6 +342,61 @@ def get_post_for_owner(post_id: int, username: str) -> sqlite3.Row | None:
     return post
 
 
+def create_comment(post_id: int, username: str, body: str) -> bool:
+    user = get_user_by_username(username)
+    if not user:
+        return False
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    conn = get_db_connection()
+    conn.execute(
+        """
+        INSERT INTO comments (post_id, user_id, body, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (post_id, user["id"], body, created_at),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_comments_for_post(post_id: int) -> list[sqlite3.Row]:
+    conn = get_db_connection()
+    comments = conn.execute(
+        """
+        SELECT comments.id, comments.body, comments.created_at, users.username,
+               COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
+        FROM comments
+        JOIN users ON comments.user_id = users.id
+        WHERE comments.post_id = ?
+        ORDER BY comments.created_at ASC
+        """,
+        (post_id,),
+    ).fetchall()
+    conn.close()
+    return comments
+
+
+def delete_comment(comment_id: int, username: str) -> bool:
+    conn = get_db_connection()
+    result = conn.execute(
+        """
+        DELETE FROM comments
+        WHERE id = (
+            SELECT comments.id
+            FROM comments
+            JOIN users ON comments.user_id = users.id
+            WHERE comments.id = ? AND users.username = ?
+        )
+        """,
+        (comment_id, username),
+    )
+    conn.commit()
+    conn.close()
+    return result.rowcount > 0
+
+
 def update_post(
     post_id: int,
     username: str,
@@ -442,12 +508,28 @@ def new_post():
     return render_template("new_post.html")
 
 
-@app.route("/posts/<int:post_id>")
+@app.route("/posts/<int:post_id>", methods=["GET", "POST"])
 def post_detail(post_id: int):
     post = get_public_post_by_id(post_id)
     if not post:
         abort(404)
-    return render_template("post_detail.html", post=post)
+
+    if request.method == "POST":
+        if not is_logged_in():
+            flash("Please log in to comment.")
+            return redirect(url_for("login"))
+
+        comment_body = request.form.get("body", "").strip()
+        if not comment_body:
+            flash("Comment cannot be empty.")
+            return redirect(url_for("post_detail", post_id=post_id))
+
+        create_comment(post_id, session["username"], comment_body)
+        flash("Comment added.")
+        return redirect(url_for("post_detail", post_id=post_id))
+
+    comments = get_comments_for_post(post_id)
+    return render_template("post_detail.html", post=post, comments=comments)
 
 
 @app.route("/posts/<int:post_id>/edit", methods=["GET", "POST"])
@@ -493,6 +575,18 @@ def delete_post_route(post_id: int):
 
     flash("Post deleted.")
     return redirect(url_for("dashboard"))
+
+
+@app.route("/comments/<int:comment_id>/delete", methods=["POST"])
+def delete_comment_route(comment_id: int):
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    if not delete_comment(comment_id, session["username"]):
+        abort(404)
+
+    flash("Comment deleted.")
+    return redirect(request.referrer or url_for("home"))
 
 
 @app.route("/users/<username>")

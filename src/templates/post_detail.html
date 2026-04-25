@@ -22,4 +22,34 @@
     {% endif %}
     <div>{{ post.body | markdown }}</div>
   </article>
+
+  <section>
+    <h2>Comments</h2>
+
+    {% if session.get("username") %}
+      <form method="post" action="{{ url_for('post_detail', post_id=post.id) }}">
+        <label for="comment-body">Add a comment</label><br>
+        <textarea id="comment-body" name="body" rows="4" cols="60" required></textarea>
+        <button type="submit">Post Comment</button>
+      </form>
+    {% else %}
+      <p><a href="{{ url_for('login') }}">Log in</a> to comment.</p>
+    {% endif %}
+
+    <ul>
+      {% for comment in comments %}
+        <li>
+          <p><strong>{{ comment.display_name }}</strong> (@{{ comment.username }}) on {{ comment.created_at }}</p>
+          <p>{{ comment.body }}</p>
+          {% if session.get("username") == comment.username %}
+            <form method="post" action="{{ url_for('delete_comment_route', comment_id=comment.id) }}">
+              <button type="submit">Delete Comment</button>
+            </form>
+          {% endif %}
+        </li>
+      {% else %}
+        <li>No comments yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
 {% endblock %}
