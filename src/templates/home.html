@@ -26,6 +26,7 @@
           <h3>{{ post.title }}</h3>
           <p>By <a href="{{ url_for('user_blog', username=post.username) }}">{{ post.display_name }}</a> on {{ post.created_at }}</p>
           <p>{{ post.body | truncate(140, True, "...") }}</p>
+          <p>{{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %}</p>
           {% if post.tags %}
             <p>
               Tags:

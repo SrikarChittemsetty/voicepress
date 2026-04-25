@@ -240,9 +240,12 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
             SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
                    , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
                    , posts.tags
+                   , COUNT(comments.id) AS comment_count
             FROM posts
             JOIN users ON posts.user_id = users.id
+            LEFT JOIN comments ON comments.post_id = posts.id
             WHERE posts.visibility = 'public' AND posts.status = 'published'
+            GROUP BY posts.id, posts.title, posts.body, posts.created_at, users.username, users.display_name, posts.tags
             ORDER BY posts.created_at DESC
             """
         ).fetchall()
@@ -253,11 +256,14 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
             SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
                    , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
                    , posts.tags
+                   , COUNT(comments.id) AS comment_count
             FROM posts
             JOIN users ON posts.user_id = users.id
+            LEFT JOIN comments ON comments.post_id = posts.id
             WHERE posts.visibility = 'public'
               AND posts.status = 'published'
               AND (posts.title LIKE ? OR posts.body LIKE ? OR posts.tags LIKE ?)
+            GROUP BY posts.id, posts.title, posts.body, posts.created_at, users.username, users.display_name, posts.tags
             ORDER BY posts.created_at DESC
             """,
             (like_query, like_query, like_query),
@@ -291,9 +297,12 @@ def get_public_posts_for_username(username: str) -> list[sqlite3.Row] | None:
     conn = get_db_connection()
     posts = conn.execute(
         """
-        SELECT id, title, body, created_at, tags
+        SELECT posts.id, posts.title, posts.body, posts.created_at, posts.tags,
+               COUNT(comments.id) AS comment_count
         FROM posts
+        LEFT JOIN comments ON comments.post_id = posts.id
         WHERE user_id = ? AND visibility = 'public' AND status = 'published'
+        GROUP BY posts.id, posts.title, posts.body, posts.created_at, posts.tags
         ORDER BY created_at DESC
         """,
         (user["id"],),
@@ -312,13 +321,16 @@ def get_public_posts_by_tag(tag: str) -> list[sqlite3.Row]:
     posts = conn.execute(
         """
         SELECT posts.id, posts.title, posts.body, posts.created_at, posts.tags,
+               COUNT(comments.id) AS comment_count,
                users.username,
                COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
         FROM posts
         JOIN users ON posts.user_id = users.id
+        LEFT JOIN comments ON comments.post_id = posts.id
         WHERE posts.visibility = 'public'
           AND posts.status = 'published'
           AND (',' || REPLACE(LOWER(posts.tags), ' ', '') || ',') LIKE ?
+        GROUP BY posts.id, posts.title, posts.body, posts.created_at, posts.tags, users.username, users.display_name
         ORDER BY posts.created_at DESC
         """,
         (like_tag,),
