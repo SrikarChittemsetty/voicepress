@@ -13,11 +13,17 @@
     <div>
       <label for="body">Body</label><br>
       <textarea id="body" name="body" rows="10" cols="60" required>{{ post.body }}</textarea>
-      <div class="dictation-toolbar" aria-label="Voice dictation">
+      <div class="dictation-toolbar" aria-label="Voice dictation and text cleanup">
         <button type="button" class="btn btn-secondary btn-small" id="dictation-start">Start dictation</button>
         <button type="button" class="btn btn-secondary btn-small" id="dictation-stop" disabled>Stop dictation</button>
+        <button type="button" class="btn btn-secondary btn-small" id="cleanup-text-btn" title="Runs simple rules on the selection, or the whole body if nothing is selected">
+          Clean up text
+        </button>
         <p id="dictation-status" class="dictation-status" role="status"></p>
       </div>
+      <p class="cleanup-hint muted">
+        <strong>Basic local cleanup (not AI):</strong> trims spaces, fixes simple capitals and end punctuation, and turns spoken words like “comma” into commas. Select part of the body to clean only that part.
+      </p>
       <p>Markdown tips: <code># Heading</code>, <code>**bold**</code>, <code>*italic*</code>, <code>- list item</code>, <code>[link text](https://example.com)</code></p>
       <div class="markdown-preview">
         <h3>Live Preview</h3>

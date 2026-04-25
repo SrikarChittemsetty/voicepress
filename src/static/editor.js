@@ -1,5 +1,5 @@
 /**
- * Post body editor: live Markdown preview + browser speech dictation.
+ * Post body editor: live Markdown preview + browser speech dictation + basic local text cleanup.
  *
  * Future: a paid or API-based transcription flow can add another button here
  * and call a backend route — see attachApiTranscriptionPlaceholder() below.
@@ -13,6 +13,127 @@
    */
   function attachApiTranscriptionPlaceholder() {
     // Example later: document.getElementById("api-transcribe").addEventListener("click", …);
+  }
+
+  /**
+   * Trim extra spaces/tabs on each line, collapse runs of spaces, tidy blank lines.
+   */
+  function trimExtraWhitespace(text) {
+    const lines = text.replace(/\r\n/g, "\n").split("\n");
+    const tidied = lines.map(function (line) {
+      return line.replace(/[ \t]+/g, " ").trim();
+    });
+    return tidied.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  /**
+   * Turn common spoken punctuation phrases into real characters (English, case-insensitive).
+   */
+  function applySpokenPunctuationPhrases(text) {
+    let t = text;
+    t = t.replace(/\s+new paragraph\s+/gi, "\n\n");
+    t = t.replace(/^\s*new paragraph\s+/i, "\n\n");
+    t = t.replace(/\s+new paragraph\s*$/i, "\n\n");
+
+    t = t.replace(/\s+exclamation point\s+/gi, "! ");
+    t = t.replace(/^\s*exclamation point\s+/i, "! ");
+    t = t.replace(/\s+exclamation point\s*$/i, "!");
+
+    t = t.replace(/\s+question mark\s+/gi, "? ");
+    t = t.replace(/^\s*question mark\s+/i, "? ");
+    t = t.replace(/\s+question mark\s*$/i, "?");
+
+    t = t.replace(/\s+period\s+/gi, ". ");
+    t = t.replace(/^\s*period\s+/i, ". ");
+    t = t.replace(/\s+period\s*$/i, ".");
+
+    t = t.replace(/\s+comma\s+/gi, ", ");
+    t = t.replace(/^\s*comma\s+/i, ", ");
+    t = t.replace(/\s+comma\s*$/i, ",");
+    return t;
+  }
+
+  /**
+   * Capitalize the first letter of the whole string and after . ! ? (followed by spaces).
+   * Also capitalizes the first letter after a block of newlines (new “paragraph”).
+   * Skips the very first character if it is not a plain lowercase letter (so Markdown like # or * is unchanged).
+   */
+  function capitalizeSentenceStarts(text) {
+    if (!text) {
+      return text;
+    }
+    let t = text;
+    const first = t.charAt(0);
+    if (/[a-z]/.test(first)) {
+      t = first.toUpperCase() + t.slice(1);
+    }
+    t = t.replace(/([.!?])\s+([a-z])/g, function (_, punct, letter) {
+      return punct + " " + letter.toUpperCase();
+    });
+    t = t.replace(/(\n+)([a-z])/g, function (_, newlines, letter) {
+      return newlines + letter.toUpperCase();
+    });
+    return t;
+  }
+
+  /**
+   * If the text does not end with common punctuation, add a final period (dictated prose).
+   */
+  function ensureSentenceEndingPunctuation(text) {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return text;
+    }
+    if (/[.!?…,;:)\]'"`-]$/.test(trimmed)) {
+      return trimmed;
+    }
+    return trimmed + ".";
+  }
+
+  /**
+   * Basic local cleanup for dictated or messy prose — rules only, no AI and no network.
+   * Intended for small stretches of text; not a grammar engine.
+   */
+  function applyBasicLocalCleanup(raw) {
+    let t = raw.replace(/\r\n/g, "\n");
+    t = applySpokenPunctuationPhrases(t);
+    t = trimExtraWhitespace(t);
+    t = capitalizeSentenceStarts(t);
+    t = ensureSentenceEndingPunctuation(t);
+    return t;
+  }
+
+  /**
+   * Runs cleanup on the current selection, or the whole body if nothing is selected.
+   */
+  function runCleanupOnBodyTextarea(textarea, onTextChanged) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const full = textarea.value;
+    const hasSelection = start !== end;
+
+    let cleaned;
+    let caretStart;
+    let caretEnd;
+    if (hasSelection) {
+      const chunk = full.substring(start, end);
+      cleaned = applyBasicLocalCleanup(chunk);
+      textarea.value = full.substring(0, start) + cleaned + full.substring(end);
+      caretStart = start;
+      caretEnd = start + cleaned.length;
+    } else {
+      cleaned = applyBasicLocalCleanup(full);
+      textarea.value = cleaned;
+      caretStart = 0;
+      caretEnd = cleaned.length;
+    }
+
+    textarea.selectionStart = caretStart;
+    textarea.selectionEnd = caretEnd;
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    if (typeof onTextChanged === "function") {
+      onTextChanged();
+    }
   }
 
   function escapeHtml(text) {
@@ -196,6 +317,7 @@
     const statusEl = document.getElementById("dictation-status");
     const startBtn = document.getElementById("dictation-start");
     const stopBtn = document.getElementById("dictation-stop");
+    const cleanupBtn = document.getElementById("cleanup-text-btn");
 
     if (!bodyTextarea || !previewEl || !statusEl || !startBtn || !stopBtn) {
       return;
@@ -209,11 +331,18 @@
     refreshPreview();
 
     attachBrowserDictation(bodyTextarea, refreshPreview, statusEl, startBtn, stopBtn);
+
+    if (cleanupBtn) {
+      cleanupBtn.addEventListener("click", function () {
+        runCleanupOnBodyTextarea(bodyTextarea, refreshPreview);
+      });
+    }
   }
 
   global.PostBodyEditor = {
     init: initPostBodyEditor,
     attachApiTranscriptionPlaceholder: attachApiTranscriptionPlaceholder,
+    applyBasicLocalCleanup: applyBasicLocalCleanup,
   };
 
   if (document.readyState === "loading") {

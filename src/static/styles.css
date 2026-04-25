@@ -212,6 +212,13 @@ li {
   color: #4b5563;
 }
 
+.cleanup-hint {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  max-width: 42rem;
+}
+
 /* Buttons (and links styled as buttons) */
 a.btn {
   display: inline-block;
