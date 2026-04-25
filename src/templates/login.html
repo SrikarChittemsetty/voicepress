@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Login - New Project Blog{% endblock %}
+
+{% block content %}
+  <h1>Login</h1>
+  <form action="{{ url_for('submit_login') }}" method="post">
+    <label for="username">Username</label>
+    <input id="username" name="username" type="text" required>
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required>
+
+    <button type="submit">Submit</button>
+  </form>
+{% endblock %}
