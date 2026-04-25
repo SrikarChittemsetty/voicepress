@@ -18,7 +18,7 @@
       {% for post in posts %}
         <li>
           <h3>{{ post.title }}</h3>
-          <p>By {{ post.username }} on {{ post.created_at }}</p>
+          <p>By <a href="{{ url_for('user_blog', username=post.username) }}">{{ post.username }}</a> on {{ post.created_at }}</p>
           <p>{{ post.body | truncate(140, True, "...") }}</p>
           <p><a href="{{ url_for('post_detail', post_id=post.id) }}">Read full post</a></p>
         </li>

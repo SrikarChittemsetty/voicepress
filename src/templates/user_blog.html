@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}{{ username }}'s Public Posts - New Project Blog{% endblock %}
+
+{% block content %}
+  <h1>{{ username }}'s Public Posts</h1>
+
+  <section>
+    <ul>
+      {% for post in posts %}
+        <li>
+          <h2>{{ post.title }}</h2>
+          <p>{{ post.created_at }}</p>
+          <p>{{ post.body | truncate(140, True, "...") }}</p>
+          <p><a href="{{ url_for('post_detail', post_id=post.id) }}">Read full post</a></p>
+        </li>
+      {% else %}
+        <li>{{ username }} has not published any public posts yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endblock %}

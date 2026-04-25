@@ -147,6 +147,25 @@ def get_public_post_by_id(post_id: int) -> sqlite3.Row | None:
     return post
 
 
+def get_public_posts_for_username(username: str) -> list[sqlite3.Row] | None:
+    user = get_user_by_username(username)
+    if not user:
+        return None
+
+    conn = get_db_connection()
+    posts = conn.execute(
+        """
+        SELECT id, title, body, created_at
+        FROM posts
+        WHERE user_id = ? AND visibility = 'public'
+        ORDER BY created_at DESC
+        """,
+        (user["id"],),
+    ).fetchall()
+    conn.close()
+    return posts
+
+
 def is_logged_in() -> bool:
     return "username" in session
 
@@ -211,6 +230,14 @@ def post_detail(post_id: int):
     if not post:
         abort(404)
     return render_template("post_detail.html", post=post)
+
+
+@app.route("/users/<username>")
+def user_blog(username: str):
+    posts = get_public_posts_for_username(username)
+    if posts is None:
+        abort(404)
+    return render_template("user_blog.html", username=username, posts=posts)
 
 
 @app.route("/contact")
