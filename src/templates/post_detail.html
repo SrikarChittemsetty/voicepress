@@ -62,7 +62,7 @@
     <h2>Comments</h2>
 
     {% if session.get("username") %}
-      <form method="post" action="{{ url_for('post_detail', post_id=post.id) }}">
+      <form method="post" action="{{ url_for('post_detail', slug=post.slug) }}">
         <label for="comment-body">Add a comment</label><br>
         <textarea id="comment-body" name="body" rows="4" cols="60" required></textarea>
         <button type="submit">Post Comment</button>
