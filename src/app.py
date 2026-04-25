@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,11 +12,18 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"
-DATABASE_PATH = Path(__file__).resolve().parent.parent / "app.db"
+
+
+def get_database_path() -> Path:
+    """SQLite file path. Tests set NEW_PROJECT_TEST_DB to a temp file so the real app.db is untouched."""
+    override = os.environ.get("NEW_PROJECT_TEST_DB")
+    if override:
+        return Path(override)
+    return Path(__file__).resolve().parent.parent / "app.db"
 
 
 def get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(str(get_database_path()))
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -895,23 +903,38 @@ def get_comments_for_post(post_id: int) -> list[sqlite3.Row]:
     return comments
 
 
-def delete_comment(comment_id: int, username: str) -> bool:
+def delete_comment(comment_id: int, username: str) -> tuple[bool, str | None]:
+    """Delete a comment only if username is the author. Returns (ok, public_post_slug_for_redirect)."""
     conn = get_db_connection()
-    result = conn.execute(
+    row = conn.execute(
         """
-        DELETE FROM comments
-        WHERE id = (
-            SELECT comments.id
-            FROM comments
-            JOIN users ON comments.user_id = users.id
-            WHERE comments.id = ? AND users.username = ?
-        )
+        SELECT comments.id AS comment_id,
+               posts.slug AS post_slug,
+               posts.visibility,
+               posts.status
+        FROM comments
+        JOIN users ON comments.user_id = users.id
+        JOIN posts ON comments.post_id = posts.id
+        WHERE comments.id = ? AND users.username = ?
         """,
         (comment_id, username),
-    )
+    ).fetchone()
+    if not row:
+        conn.close()
+        return (False, None)
+
+    redirect_slug: str | None = None
+    if (
+        row["post_slug"]
+        and row["visibility"] == "public"
+        and row["status"] == "published"
+    ):
+        redirect_slug = row["post_slug"]
+
+    conn.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
     conn.commit()
     conn.close()
-    return result.rowcount > 0
+    return (True, redirect_slug)
 
 
 def update_post(
@@ -947,22 +970,87 @@ def update_post(
 
 
 def delete_post(post_id: int, username: str) -> bool:
+    """Remove a post owned by username and all related comments, likes, and bookmarks (any user)."""
     conn = get_db_connection()
-    result = conn.execute(
+    row = conn.execute(
         """
-        DELETE FROM posts
-        WHERE id = (
-            SELECT posts.id
-            FROM posts
-            JOIN users ON posts.user_id = users.id
-            WHERE posts.id = ? AND users.username = ?
-        )
+        SELECT posts.id
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        WHERE posts.id = ? AND users.username = ?
         """,
         (post_id, username),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return False
+
+    pid = row["id"]
+    conn.execute("DELETE FROM comments WHERE post_id = ?", (pid,))
+    conn.execute("DELETE FROM likes WHERE post_id = ?", (pid,))
+    conn.execute("DELETE FROM bookmarks WHERE post_id = ?", (pid,))
+    conn.execute("DELETE FROM posts WHERE id = ?", (pid,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def update_password_for_user(username: str, current_password: str, new_password: str) -> tuple[bool, str]:
+    """Verify current password and set a new hash. Returns (success, message for flash)."""
+    user = get_user_by_username(username)
+    if not user:
+        return (False, "Something went wrong. Please log in again.")
+
+    if not check_password_hash(user["password_hash"], current_password):
+        return (False, "Current password is incorrect.")
+
+    new_hash = generate_password_hash(new_password)
+    conn = get_db_connection()
+    conn.execute(
+        "UPDATE users SET password_hash = ? WHERE username = ?",
+        (new_hash, username),
     )
     conn.commit()
     conn.close()
-    return result.rowcount > 0
+    return (True, "Your password was updated successfully.")
+
+
+def delete_user_account(username: str, confirmation_username: str) -> tuple[bool, str]:
+    """
+    Permanently remove the user and all associated data.
+    confirmation_username must match exactly (case-sensitive).
+    """
+    if confirmation_username != username:
+        return (False, "Confirmation did not match your username exactly.")
+
+    user = get_user_by_username(username)
+    if not user:
+        return (False, "Account not found.")
+
+    uid = user["id"]
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        post_rows = conn.execute("SELECT id FROM posts WHERE user_id = ?", (uid,)).fetchall()
+        post_ids = [r["id"] for r in post_rows]
+        if post_ids:
+            placeholders = ",".join("?" * len(post_ids))
+            conn.execute(f"DELETE FROM comments WHERE post_id IN ({placeholders})", post_ids)
+            conn.execute(f"DELETE FROM likes WHERE post_id IN ({placeholders})", post_ids)
+            conn.execute(f"DELETE FROM bookmarks WHERE post_id IN ({placeholders})", post_ids)
+
+        conn.execute("DELETE FROM comments WHERE user_id = ?", (uid,))
+        conn.execute("DELETE FROM likes WHERE user_id = ?", (uid,))
+        conn.execute("DELETE FROM bookmarks WHERE user_id = ?", (uid,))
+        conn.execute("DELETE FROM posts WHERE user_id = ?", (uid,))
+        conn.execute("DELETE FROM users WHERE id = ?", (uid,))
+        conn.commit()
+    except sqlite3.Error:
+        conn.rollback()
+        conn.close()
+        return (False, "Could not delete the account. Please try again.")
+    conn.close()
+    return (True, "Your account has been deleted. We are sorry to see you go.")
 
 
 def is_logged_in() -> bool:
@@ -971,6 +1059,11 @@ def is_logged_in() -> bool:
 
 init_db()
 app.add_template_filter(render_markdown, "markdown")
+
+
+@app.errorhandler(404)
+def page_not_found(_e):
+    return render_template("404.html"), 404
 
 
 @app.route("/")
@@ -1241,10 +1334,13 @@ def delete_comment_route(comment_id: int):
     if not is_logged_in():
         return redirect(url_for("login"))
 
-    if not delete_comment(comment_id, session["username"]):
+    ok, public_slug = delete_comment(comment_id, session["username"])
+    if not ok:
         abort(404)
 
     flash("Comment deleted.")
+    if public_slug:
+        return redirect(url_for("post_detail", slug=public_slug))
     return redirect(request.referrer or url_for("home"))
 
 
@@ -1287,6 +1383,48 @@ def profile():
         return redirect(url_for("profile"))
 
     return render_template("profile.html", user=user)
+
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    username = session["username"]
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+
+        if action == "change_password":
+            current_password = request.form.get("current_password", "")
+            new_password = request.form.get("new_password", "")
+            confirm = request.form.get("new_password_confirm", "")
+
+            if not new_password or not confirm:
+                flash("Please enter and confirm your new password.")
+            elif new_password != confirm:
+                flash("New password and confirmation do not match.")
+            elif len(new_password) < 8:
+                flash("New password must be at least 8 characters.")
+            else:
+                ok, msg = update_password_for_user(username, current_password, new_password)
+                flash(msg)
+                if not ok:
+                    pass
+            return redirect(url_for("settings"))
+
+        if action == "delete_account":
+            confirmation = request.form.get("confirm_username", "").strip()
+            ok, msg = delete_user_account(username, confirmation)
+            flash(msg)
+            if ok:
+                session.clear()
+                return redirect(url_for("home"))
+            return redirect(url_for("settings"))
+
+        flash("Unknown action.")
+        return redirect(url_for("settings"))
+
+    return render_template("settings.html", username=username)
 
 
 @app.route("/contact")

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Account settings - New Project Blog{% endblock %}
+
+{% block content %}
+  <h1>Account settings</h1>
+  <p class="section-lead">Signed in as <strong>{{ username }}</strong>. Your password is never shown on this page.</p>
+
+  <section class="settings-card">
+    <h2>Change password</h2>
+    <p>Enter your current password, then choose a new one (at least 8 characters). You will stay logged in after a successful change.</p>
+    <form method="post" action="{{ url_for('settings') }}">
+      <input type="hidden" name="action" value="change_password">
+      <div>
+        <label for="current_password">Current password</label><br>
+        <input id="current_password" name="current_password" type="password" required autocomplete="current-password">
+      </div>
+      <div>
+        <label for="new_password">New password</label><br>
+        <input id="new_password" name="new_password" type="password" required minlength="8" autocomplete="new-password">
+      </div>
+      <div>
+        <label for="new_password_confirm">Confirm new password</label><br>
+        <input id="new_password_confirm" name="new_password_confirm" type="password" required minlength="8" autocomplete="new-password">
+      </div>
+      <button class="btn" type="submit">Update password</button>
+    </form>
+  </section>
+
+  <section class="danger-zone" aria-labelledby="danger-heading">
+    <h2 id="danger-heading">Danger zone</h2>
+    <p><strong>Deleting your account cannot be undone.</strong> All of your posts, comments you wrote, likes, and bookmarks will be removed. Comments and engagement from other people on <em>your</em> posts will also be deleted with those posts.</p>
+    <form method="post" action="{{ url_for('settings') }}" class="delete-account-form" onsubmit="return confirm('Are you sure you want to permanently delete your account? This cannot be undone.');">
+      <input type="hidden" name="action" value="delete_account">
+      <div>
+        <label for="confirm_username">Type your username to confirm</label><br>
+        <input id="confirm_username" name="confirm_username" type="text" required autocomplete="username" placeholder="{{ username }}">
+      </div>
+      <button class="btn btn-danger" type="submit">Delete my account forever</button>
+    </form>
+  </section>
+{% endblock %}

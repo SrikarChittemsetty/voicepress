@@ -527,3 +527,29 @@ td img {
   margin: 0;
   white-space: pre-wrap;
 }
+
+.settings-card {
+  background: #fff;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 1rem 1.15rem;
+  margin-top: 1rem;
+}
+
+.danger-zone {
+  margin-top: 2rem;
+  padding: 1.15rem 1.25rem;
+  border: 2px solid #b91c1c;
+  border-radius: 10px;
+  background: #fef2f2;
+}
+
+.danger-zone h2 {
+  color: #991b1b;
+}
+
+.delete-account-form {
+  margin-top: 0.75rem;
+  background: #fff5f5;
+  border-color: #fecaca;
+}
