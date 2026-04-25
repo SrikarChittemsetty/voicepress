@@ -93,6 +93,17 @@ def init_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS likes (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            post_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE(user_id, post_id)
+        )
+        """
+    )
     ensure_posts_visibility_column(conn)
     ensure_posts_status_column(conn)
     ensure_posts_tags_column(conn)
@@ -251,12 +262,19 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
             SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
                    , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
                    , posts.tags
-                   , COUNT(comments.id) AS comment_count
+                   , (
+                       SELECT COUNT(*)
+                       FROM comments
+                       WHERE comments.post_id = posts.id
+                   ) AS comment_count
+                   , (
+                       SELECT COUNT(*)
+                       FROM likes
+                       WHERE likes.post_id = posts.id
+                   ) AS like_count
             FROM posts
             JOIN users ON posts.user_id = users.id
-            LEFT JOIN comments ON comments.post_id = posts.id
             WHERE posts.visibility = 'public' AND posts.status = 'published'
-            GROUP BY posts.id, posts.title, posts.body, posts.created_at, users.username, users.display_name, posts.tags
             ORDER BY posts.created_at DESC
             """
         ).fetchall()
@@ -267,14 +285,21 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
             SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
                    , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
                    , posts.tags
-                   , COUNT(comments.id) AS comment_count
+                   , (
+                       SELECT COUNT(*)
+                       FROM comments
+                       WHERE comments.post_id = posts.id
+                   ) AS comment_count
+                   , (
+                       SELECT COUNT(*)
+                       FROM likes
+                       WHERE likes.post_id = posts.id
+                   ) AS like_count
             FROM posts
             JOIN users ON posts.user_id = users.id
-            LEFT JOIN comments ON comments.post_id = posts.id
             WHERE posts.visibility = 'public'
               AND posts.status = 'published'
               AND (posts.title LIKE ? OR posts.body LIKE ? OR posts.tags LIKE ?)
-            GROUP BY posts.id, posts.title, posts.body, posts.created_at, users.username, users.display_name, posts.tags
             ORDER BY posts.created_at DESC
             """,
             (like_query, like_query, like_query),
@@ -289,7 +314,12 @@ def get_public_post_by_id(post_id: int) -> sqlite3.Row | None:
         """
         SELECT posts.id, posts.title, posts.body, posts.created_at, users.username,
                COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name,
-               posts.tags
+               posts.tags,
+               (
+                   SELECT COUNT(*)
+                   FROM likes
+                   WHERE likes.post_id = posts.id
+               ) AS like_count
         FROM posts
         JOIN users ON posts.user_id = users.id
         WHERE posts.id = ? AND posts.visibility = 'public' AND posts.status = 'published'
@@ -309,11 +339,18 @@ def get_public_posts_for_username(username: str) -> list[sqlite3.Row] | None:
     posts = conn.execute(
         """
         SELECT posts.id, posts.title, posts.body, posts.created_at, posts.tags,
-               COUNT(comments.id) AS comment_count
+               (
+                   SELECT COUNT(*)
+                   FROM comments
+                   WHERE comments.post_id = posts.id
+               ) AS comment_count,
+               (
+                   SELECT COUNT(*)
+                   FROM likes
+                   WHERE likes.post_id = posts.id
+               ) AS like_count
         FROM posts
-        LEFT JOIN comments ON comments.post_id = posts.id
         WHERE user_id = ? AND visibility = 'public' AND status = 'published'
-        GROUP BY posts.id, posts.title, posts.body, posts.created_at, posts.tags
         ORDER BY created_at DESC
         """,
         (user["id"],),
@@ -332,16 +369,23 @@ def get_public_posts_by_tag(tag: str) -> list[sqlite3.Row]:
     posts = conn.execute(
         """
         SELECT posts.id, posts.title, posts.body, posts.created_at, posts.tags,
-               COUNT(comments.id) AS comment_count,
+               (
+                   SELECT COUNT(*)
+                   FROM comments
+                   WHERE comments.post_id = posts.id
+               ) AS comment_count,
+               (
+                   SELECT COUNT(*)
+                   FROM likes
+                   WHERE likes.post_id = posts.id
+               ) AS like_count,
                users.username,
                COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
         FROM posts
         JOIN users ON posts.user_id = users.id
-        LEFT JOIN comments ON comments.post_id = posts.id
         WHERE posts.visibility = 'public'
           AND posts.status = 'published'
           AND (',' || REPLACE(LOWER(posts.tags), ' ', '') || ',') LIKE ?
-        GROUP BY posts.id, posts.title, posts.body, posts.created_at, posts.tags, users.username, users.display_name
         ORDER BY posts.created_at DESC
         """,
         (like_tag,),
@@ -441,6 +485,59 @@ def get_bookmarked_posts_for_user(username: str) -> list[sqlite3.Row]:
     ).fetchall()
     conn.close()
     return posts
+
+
+def is_post_liked(post_id: int, username: str) -> bool:
+    user = get_user_by_username(username)
+    if not user:
+        return False
+
+    conn = get_db_connection()
+    like = conn.execute(
+        "SELECT id FROM likes WHERE user_id = ? AND post_id = ?",
+        (user["id"], post_id),
+    ).fetchone()
+    conn.close()
+    return like is not None
+
+
+def add_like(post_id: int, username: str) -> bool:
+    user = get_user_by_username(username)
+    post = get_public_post_by_id(post_id)
+    if not user or not post:
+        return False
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO likes (user_id, post_id, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (user["id"], post_id, created_at),
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+
+def remove_like(post_id: int, username: str) -> bool:
+    user = get_user_by_username(username)
+    if not user:
+        return False
+
+    conn = get_db_connection()
+    result = conn.execute(
+        "DELETE FROM likes WHERE user_id = ? AND post_id = ?",
+        (user["id"], post_id),
+    )
+    conn.commit()
+    conn.close()
+    return result.rowcount > 0
 
 
 def create_comment(post_id: int, username: str, body: str) -> bool:
@@ -632,9 +729,51 @@ def post_detail(post_id: int):
 
     comments = get_comments_for_post(post_id)
     bookmarked = False
+    liked = False
     if is_logged_in():
         bookmarked = is_post_bookmarked(post_id, session["username"])
-    return render_template("post_detail.html", post=post, comments=comments, is_bookmarked=bookmarked)
+        liked = is_post_liked(post_id, session["username"])
+    return render_template(
+        "post_detail.html",
+        post=post,
+        comments=comments,
+        is_bookmarked=bookmarked,
+        is_liked=liked,
+    )
+
+
+@app.route("/posts/<int:post_id>/like", methods=["POST"])
+def like_post(post_id: int):
+    if not is_logged_in():
+        flash("Please log in to like posts.")
+        return redirect(url_for("login"))
+
+    post = get_public_post_by_id(post_id)
+    if not post:
+        abort(404)
+
+    if add_like(post_id, session["username"]):
+        flash("Post liked.")
+    else:
+        flash("Post is already liked.")
+    return redirect(url_for("post_detail", post_id=post_id))
+
+
+@app.route("/posts/<int:post_id>/unlike", methods=["POST"])
+def unlike_post(post_id: int):
+    if not is_logged_in():
+        flash("Please log in to manage likes.")
+        return redirect(url_for("login"))
+
+    post = get_public_post_by_id(post_id)
+    if not post:
+        abort(404)
+
+    if remove_like(post_id, session["username"]):
+        flash("Like removed.")
+    else:
+        flash("Like not found.")
+    return redirect(url_for("post_detail", post_id=post_id))
 
 
 @app.route("/posts/<int:post_id>/bookmark", methods=["POST"])

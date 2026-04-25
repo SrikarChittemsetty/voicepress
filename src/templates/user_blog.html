@@ -17,6 +17,7 @@
           <p>{{ post.created_at }}</p>
           <p>{{ post.body | truncate(140, True, "...") }}</p>
           <p>{{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %}</p>
+          <p>{{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}</p>
           {% if post.tags %}
             <p>
               Tags:
