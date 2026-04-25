@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
@@ -6,7 +7,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"
-blog_posts: list[dict[str, str]] = []
 DATABASE_PATH = Path(__file__).resolve().parent.parent / "app.db"
 
 
@@ -24,6 +24,17 @@ def init_db() -> None:
             id INTEGER PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS posts (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL
         )
         """
     )
@@ -57,6 +68,41 @@ def get_user_by_username(username: str) -> sqlite3.Row | None:
     return user
 
 
+def create_post(username: str, title: str, body: str) -> bool:
+    user = get_user_by_username(username)
+    if not user:
+        return False
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO posts (user_id, title, body, created_at) VALUES (?, ?, ?, ?)",
+        (user["id"], title, body, created_at),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_posts_for_user(username: str) -> list[sqlite3.Row]:
+    user = get_user_by_username(username)
+    if not user:
+        return []
+
+    conn = get_db_connection()
+    posts = conn.execute(
+        """
+        SELECT id, title, body, created_at
+        FROM posts
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        """,
+        (user["id"],),
+    ).fetchall()
+    conn.close()
+    return posts
+
+
 def is_logged_in() -> bool:
     return "username" in session
 
@@ -88,7 +134,7 @@ def dashboard():
     return render_template(
         "dashboard.html",
         username=session["username"],
-        blog_posts=blog_posts,
+        blog_posts=get_posts_for_user(session["username"]),
     )
 
 
@@ -105,13 +151,7 @@ def new_post():
             flash("Title and body are required.")
             return redirect(url_for("new_post"))
 
-        blog_posts.append(
-            {
-                "title": title,
-                "body": body,
-                "username": session["username"],
-            }
-        )
+        create_post(session["username"], title, body)
         flash("Post created.")
         return redirect(url_for("dashboard"))
 
