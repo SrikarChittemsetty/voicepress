@@ -2,7 +2,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
@@ -34,12 +34,23 @@ def init_db() -> None:
             user_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             body TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            visibility TEXT NOT NULL DEFAULT 'public'
         )
         """
     )
+    ensure_posts_visibility_column(conn)
     conn.commit()
     conn.close()
+
+
+def ensure_posts_visibility_column(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
+    has_visibility_column = any(column["name"] == "visibility" for column in columns)
+    if not has_visibility_column:
+        conn.execute(
+            "ALTER TABLE posts ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'"
+        )
 
 
 def create_user(username: str, password: str) -> bool:
@@ -68,7 +79,7 @@ def get_user_by_username(username: str) -> sqlite3.Row | None:
     return user
 
 
-def create_post(username: str, title: str, body: str) -> bool:
+def create_post(username: str, title: str, body: str, visibility: str) -> bool:
     user = get_user_by_username(username)
     if not user:
         return False
@@ -76,8 +87,11 @@ def create_post(username: str, title: str, body: str) -> bool:
     created_at = datetime.now(timezone.utc).isoformat()
     conn = get_db_connection()
     conn.execute(
-        "INSERT INTO posts (user_id, title, body, created_at) VALUES (?, ?, ?, ?)",
-        (user["id"], title, body, created_at),
+        """
+        INSERT INTO posts (user_id, title, body, created_at, visibility)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (user["id"], title, body, created_at, visibility),
     )
     conn.commit()
     conn.close()
@@ -92,7 +106,7 @@ def get_posts_for_user(username: str) -> list[sqlite3.Row]:
     conn = get_db_connection()
     posts = conn.execute(
         """
-        SELECT id, title, body, created_at
+        SELECT id, title, body, created_at, visibility
         FROM posts
         WHERE user_id = ?
         ORDER BY created_at DESC
@@ -101,6 +115,35 @@ def get_posts_for_user(username: str) -> list[sqlite3.Row]:
     ).fetchall()
     conn.close()
     return posts
+
+
+def get_all_posts() -> list[sqlite3.Row]:
+    conn = get_db_connection()
+    posts = conn.execute(
+        """
+        SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        ORDER BY posts.created_at DESC
+        """
+    ).fetchall()
+    conn.close()
+    return posts
+
+
+def get_post_by_id(post_id: int) -> sqlite3.Row | None:
+    conn = get_db_connection()
+    post = conn.execute(
+        """
+        SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        WHERE posts.id = ?
+        """,
+        (post_id,),
+    ).fetchone()
+    conn.close()
+    return post
 
 
 def is_logged_in() -> bool:
@@ -112,7 +155,7 @@ init_db()
 
 @app.route("/")
 def home() -> str:
-    return render_template("home.html")
+    return render_template("home.html", posts=get_all_posts())
 
 
 @app.route("/about")
@@ -146,16 +189,27 @@ def new_post():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         body = request.form.get("body", "").strip()
+        visibility = request.form.get("visibility", "public")
+        if visibility not in {"public", "private"}:
+            visibility = "public"
 
         if not title or not body:
             flash("Title and body are required.")
             return redirect(url_for("new_post"))
 
-        create_post(session["username"], title, body)
+        create_post(session["username"], title, body, visibility)
         flash("Post created.")
         return redirect(url_for("dashboard"))
 
     return render_template("new_post.html")
+
+
+@app.route("/posts/<int:post_id>")
+def post_detail(post_id: int):
+    post = get_post_by_id(post_id)
+    if not post:
+        abort(404)
+    return render_template("post_detail.html", post=post)
 
 
 @app.route("/contact")

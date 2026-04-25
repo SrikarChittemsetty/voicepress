@@ -23,6 +23,7 @@
       {% for post in blog_posts %}
         <li>
           <h3>{{ post.title }}</h3>
+          <p>Visibility: {{ post.visibility }}</p>
           <p>{{ post.body }}</p>
         </li>
       {% else %}

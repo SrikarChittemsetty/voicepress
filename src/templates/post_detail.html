@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}{{ post.title }} - New Project Blog{% endblock %}
+
+{% block content %}
+  <article>
+    <h1>{{ post.title }}</h1>
+    <p>By {{ post.username }} on {{ post.created_at }}</p>
+    <p>{{ post.body }}</p>
+  </article>
+{% endblock %}
