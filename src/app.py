@@ -1,13 +1,67 @@
+import sqlite3
+from pathlib import Path
+
 from flask import Flask, flash, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-key"
-registered_users: dict[str, str] = {}
 blog_posts: list[dict[str, str]] = []
+DATABASE_PATH = Path(__file__).resolve().parent.parent / "app.db"
+
+
+def get_db_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db() -> None:
+    conn = get_db_connection()
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def create_user(username: str, password: str) -> bool:
+    password_hash = generate_password_hash(password)
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+            (username, password_hash),
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+
+def get_user_by_username(username: str) -> sqlite3.Row | None:
+    conn = get_db_connection()
+    user = conn.execute(
+        "SELECT id, username, password_hash FROM users WHERE username = ?",
+        (username,),
+    ).fetchone()
+    conn.close()
+    return user
 
 
 def is_logged_in() -> bool:
     return "username" in session
+
+
+init_db()
 
 
 @app.route("/")
@@ -80,9 +134,13 @@ def submit_registration() -> str:
     password = request.form.get("password", "")
 
     if not username or not password:
-        return "Username and password are required"
+        flash("Username and password are required.")
+        return redirect(url_for("register"))
 
-    registered_users[username] = password
+    if not create_user(username, password):
+        flash("Username already exists.")
+        return redirect(url_for("register"))
+
     return redirect(url_for("login"))
 
 
@@ -95,8 +153,9 @@ def login() -> str:
 def submit_login() -> str:
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "")
+    user = get_user_by_username(username)
 
-    if registered_users.get(username) == password:
+    if user and check_password_hash(user["password_hash"], password):
         session["username"] = username
         return redirect(url_for("dashboard"))
 
