@@ -132,14 +132,14 @@ def get_public_posts() -> list[sqlite3.Row]:
     return posts
 
 
-def get_post_by_id(post_id: int) -> sqlite3.Row | None:
+def get_public_post_by_id(post_id: int) -> sqlite3.Row | None:
     conn = get_db_connection()
     post = conn.execute(
         """
         SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
         FROM posts
         JOIN users ON posts.user_id = users.id
-        WHERE posts.id = ?
+        WHERE posts.id = ? AND posts.visibility = 'public'
         """,
         (post_id,),
     ).fetchone()
@@ -207,7 +207,7 @@ def new_post():
 
 @app.route("/posts/<int:post_id>")
 def post_detail(post_id: int):
-    post = get_post_by_id(post_id)
+    post = get_public_post_by_id(post_id)
     if not post:
         abort(404)
     return render_template("post_detail.html", post=post)
