@@ -197,6 +197,21 @@ li {
   margin: 0.45rem 0;
 }
 
+.dictation-toolbar {
+  margin: 0.5rem 0 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dictation-status {
+  margin: 0;
+  flex: 1 1 200px;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
 /* Buttons (and links styled as buttons) */
 a.btn {
   display: inline-block;
