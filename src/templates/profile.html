@@ -1,25 +1,22 @@
 {% extends "base.html" %}
 
-{% block title %}Your Profile - New Project Blog{% endblock %}
+{% block title %}Your Profile - VoicePress{% endblock %}
 
 {% block content %}
-  <h1>Edit Profile</h1>
-  <p>Manage your public profile details.</p>
+  <h1>Your Profile</h1>
+  <p class="section-lead">This information appears publicly on your author page.</p>
 
   <form method="post" action="{{ url_for('profile') }}">
     <div>
-      <label for="display_name">Display Name</label><br>
-      <input
-        id="display_name"
-        name="display_name"
-        type="text"
-        value="{{ user.display_name or user.username }}"
-      >
+      <label for="display_name">Display name</label><br>
+      <input id="display_name" name="display_name" type="text" value="{{ user.display_name or user.username }}">
+      <p class="muted">If empty, your username is used automatically.</p>
     </div>
 
     <div>
       <label for="bio">Bio</label><br>
       <textarea id="bio" name="bio" rows="5" cols="60">{{ user.bio }}</textarea>
+      <p class="muted">A short bio helps readers discover your writing.</p>
     </div>
 
     <button class="btn" type="submit">Save profile</button>

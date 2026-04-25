@@ -1,28 +1,40 @@
 """
-Integration tests for auth, publishing visibility, ownership, and account deletion.
+Integration tests for auth, publishing safety, ownership, and account lifecycle.
 
-Uses a temporary SQLite file via NEW_PROJECT_TEST_DB so the real app.db is never modified.
+Each test points the app at a temporary SQLite file via NEW_PROJECT_TEST_DB,
+so the real local app.db is never modified.
 """
 
 from __future__ import annotations
 
-import importlib
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
+APP_FILE = Path(__file__).resolve().parents[1] / "src" / "app.py"
+MODULE_NAME = "voicepress_app_under_test"
+
+
+def load_app_module():
+    if MODULE_NAME in sys.modules:
+        del sys.modules[MODULE_NAME]
+    spec = importlib.util.spec_from_file_location(MODULE_NAME, APP_FILE)
+    module = importlib.util.module_from_spec(spec)
+    assert spec is not None and spec.loader is not None
+    sys.modules[MODULE_NAME] = module
+    spec.loader.exec_module(module)
+    return module
+
 
 @pytest.fixture
 def app_bundle(tmp_path, monkeypatch):
-    """Fresh Flask app + DB per test (reload app module so init_db runs on the temp file)."""
-    db_path = tmp_path / "pytest_blog.sqlite"
+    """Fresh Flask app module + DB file per test."""
+    db_path = tmp_path / "pytest_voicepress.sqlite"
     monkeypatch.setenv("NEW_PROJECT_TEST_DB", str(db_path))
 
-    if "src.app" in sys.modules:
-        importlib.reload(sys.modules["src.app"])
-    import src.app as app_module
-
+    app_module = load_app_module()
     app_module.app.config["TESTING"] = True
     with app_module.app.test_client() as client:
         yield type("Bundle", (), {"client": client, "app": app_module.app, "m": app_module})()
@@ -62,16 +74,14 @@ def _new_post(client, title: str, body: str, visibility: str, status: str) -> No
 
 
 def test_register_login_persists(app_bundle):
-    """User can sign up and then log in; session reaches the dashboard."""
     c = app_bundle.client
     _register(c, "dana", "dana-secret-99")
     r = _login(c, "dana", "dana-secret-99")
     assert r.status_code == 200
-    assert b"Dashboard" in r.data
+    assert b"Writer Control Center" in r.data
 
 
 def test_invalid_login_fails(app_bundle):
-    """Wrong password does not create a session."""
     c = app_bundle.client
     _register(c, "eli", "eli-correct-pass-88")
     r = c.post(
@@ -84,7 +94,6 @@ def test_invalid_login_fails(app_bundle):
 
 
 def test_private_and_draft_posts_not_public(app_bundle):
-    """Home feed only shows public published posts."""
     c = app_bundle.client
     _register(c, "frank", "frank-pass-77")
     _login(c, "frank", "frank-pass-77")
@@ -135,9 +144,35 @@ def test_non_owner_cannot_edit_another_users_post(app_bundle):
         },
     )
     assert r_edit.status_code == 404
+    assert c.get(f"/posts/{post_id}/edit").status_code == 404
 
-    r_get = c.get(f"/posts/{post_id}/edit")
-    assert r_get.status_code == 404
+
+def test_comments_likes_and_bookmarks_basics(app_bundle):
+    m = app_bundle.m
+    c = app_bundle.client
+
+    _register(c, "writer", "writer-pass")
+    _register(c, "reader", "reader-pass")
+
+    _login(c, "writer", "writer-pass")
+    _new_post(c, "Public Post", "Body here", "public", "published")
+
+    post = m.get_public_posts("Public Post")[0]
+    post_id = post["id"]
+    slug = post["slug"]
+
+    _login(c, "reader", "reader-pass")
+    c.post(f"/posts/{post_id}/like", follow_redirects=True)
+    c.post(f"/posts/{post_id}/bookmark", follow_redirects=True)
+    c.post(f"/posts/{slug}", data={"body": "Nice write-up"}, follow_redirects=True)
+
+    detail = m.get_public_post_by_slug(slug)
+    comments = m.get_comments_for_post(post_id)
+    assert detail["like_count"] == 1
+    assert len(comments) == 1
+
+    bookmarks = m.get_bookmarked_posts_for_user("reader")
+    assert len(bookmarks) == 1
 
 
 def test_deleted_account_removes_user_data_and_engagement(app_bundle):
@@ -148,23 +183,13 @@ def test_deleted_account_removes_user_data_and_engagement(app_bundle):
     _register(c, "bob2", "bob2-pass-22")
     _login(c, "alice2", "alice2-pass-33")
     _new_post(c, "Post to delete", "Body text", "public", "published")
-    posts = m.get_posts_for_user("alice2", "all")
-    post_id = posts[0]["id"]
-    row = m.get_public_post_by_id(post_id)
-    assert row is not None
-    slug = row["slug"]
+    post_id = m.get_posts_for_user("alice2", "all")[0]["id"]
+    slug = m.get_public_post_by_id(post_id)["slug"]
 
     _login(c, "bob2", "bob2-pass-22")
-    c.post(
-        f"/posts/{slug}",
-        data={"body": "Nice post!"},
-        follow_redirects=True,
-    )
-
-    conn = m.get_db_connection()
-    n_comments_before = conn.execute("SELECT COUNT(*) AS n FROM comments").fetchone()["n"]
-    conn.close()
-    assert n_comments_before >= 1
+    c.post(f"/posts/{slug}", data={"body": "Nice post!"}, follow_redirects=True)
+    c.post(f"/posts/{post_id}/like", follow_redirects=True)
+    c.post(f"/posts/{post_id}/bookmark", follow_redirects=True)
 
     _login(c, "alice2", "alice2-pass-33")
     r_del = c.post(
@@ -178,16 +203,20 @@ def test_deleted_account_removes_user_data_and_engagement(app_bundle):
     alice_row = conn.execute("SELECT id FROM users WHERE username = ?", ("alice2",)).fetchone()
     posts_left = conn.execute("SELECT COUNT(*) AS n FROM posts").fetchone()["n"]
     comments_left = conn.execute("SELECT COUNT(*) AS n FROM comments").fetchone()["n"]
+    likes_left = conn.execute("SELECT COUNT(*) AS n FROM likes").fetchone()["n"]
+    bookmarks_left = conn.execute("SELECT COUNT(*) AS n FROM bookmarks").fetchone()["n"]
     bob_row = conn.execute("SELECT id FROM users WHERE username = ?", ("bob2",)).fetchone()
     conn.close()
 
     assert alice_row is None
     assert posts_left == 0
     assert comments_left == 0
+    assert likes_left == 0
+    assert bookmarks_left == 0
     assert bob_row is not None
 
 
-def test_change_password_keeps_session(app_bundle):
+def test_change_password_without_min_length_still_works(app_bundle):
     c = app_bundle.client
     _register(c, "chris", "old-pass-00")
     _login(c, "chris", "old-pass-00")
@@ -197,22 +226,20 @@ def test_change_password_keeps_session(app_bundle):
         data={
             "action": "change_password",
             "current_password": "old-pass-00",
-            "new_password": "new-pass-11-long",
-            "new_password_confirm": "new-pass-11-long",
+            "new_password": "x",
+            "new_password_confirm": "x",
         },
         follow_redirects=True,
     )
     assert r.status_code == 200
     assert b"password was updated" in r.data.lower()
 
-    dash = c.get("/dashboard")
-    assert dash.status_code == 200
+    dashboard = c.get("/dashboard")
+    assert dashboard.status_code == 200
 
     c.post("/logout", follow_redirects=True)
-    bad = _login(c, "chris", "old-pass-00")
-    assert b"Invalid username or password" in bad.data
-    good = _login(c, "chris", "new-pass-11-long")
-    assert good.status_code == 200
+    assert b"Invalid username or password" in _login(c, "chris", "old-pass-00").data
+    assert _login(c, "chris", "x").status_code == 200
 
 
 def test_custom_404_page(app_bundle):
@@ -220,3 +247,11 @@ def test_custom_404_page(app_bundle):
     assert r.status_code == 404
     assert b"Page not found" in r.data
     assert b"Back to home" in r.data
+
+
+def test_secret_key_fallback_when_env_not_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEW_PROJECT_TEST_DB", str(tmp_path / "db.sqlite"))
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+
+    app_module = load_app_module()
+    assert app_module.app.secret_key == "dev-only-change-me"

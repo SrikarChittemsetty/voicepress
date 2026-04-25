@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - New Project Blog{% endblock %}
+{% block title %}Writer Control Center - VoicePress{% endblock %}
 
 {% block content %}
-  <h1>Dashboard</h1>
-  <p>Welcome, {{ username }}.</p>
-  <p><a class="btn" href="{{ url_for('new_post') }}">Create new post</a></p>
+  <h1>Writer Control Center</h1>
+  <p class="section-lead">Welcome back, <strong>{{ username }}</strong>. Draft, publish, and manage everything from one place.</p>
+  <p><a class="btn" href="{{ url_for('new_post') }}">+ New Post</a></p>
 
   <section class="dashboard-stats" aria-label="Your writing stats">
     <h2>At a glance</h2>
@@ -16,7 +16,7 @@
       <li><span class="stats-value">{{ dashboard_stats.private_count }}</span> private</li>
     </ul>
     {% if dashboard_stats.bookmark_count > 0 %}
-      <p class="stats-bookmarks">You have saved <strong>{{ dashboard_stats.bookmark_count }}</strong> bookmarked post{% if dashboard_stats.bookmark_count != 1 %}s{% endif %} to read later.</p>
+      <p class="stats-bookmarks"><strong>{{ dashboard_stats.bookmark_count }}</strong> bookmarked post{% if dashboard_stats.bookmark_count != 1 %}s{% endif %} saved for later.</p>
     {% endif %}
   </section>
 
@@ -32,9 +32,9 @@
     </nav>
 
     {% if not blog_posts and dashboard_stats.total_posts == 0 %}
-      <p class="empty-state">You have not created any posts yet. Use <strong>Create new post</strong> above to write your first one.</p>
+      <p class="empty-state">You have not created any posts yet. Click <strong>New Post</strong> to publish your first draft.</p>
     {% elif not blog_posts %}
-      <p class="empty-state">No posts match this filter. Try <a href="{{ url_for('dashboard', filter='all') }}">viewing all posts</a> or pick another filter.</p>
+      <p class="empty-state">No posts match this filter. Try <a href="{{ url_for('dashboard', filter='all') }}">All</a>.</p>
     {% else %}
       <table>
         <thead>
@@ -50,29 +50,20 @@
         <tbody>
           {% for post in blog_posts %}
             <tr>
-              <td>{{ post.title }}</td>
+              <td><strong>{{ post.title }}</strong></td>
               <td>{{ post.visibility }}</td>
               <td>{{ post.status }}</td>
               <td>{{ post.created_at }}</td>
               <td>
-                {% if post.cover_image_url %}
-                  <img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}">
-                  <br>
-                {% endif %}
+                {% if post.cover_image_url %}<img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}"><br>{% endif %}
                 {{ post.excerpt if post.excerpt else post.body | truncate(100, True, "...") }}
-                {% if post.tags %}
-                  <br>
-                  <small>Tags: {{ post.tags }}</small>
-                {% endif %}
-                {% if post.category and post.category.strip() %}
-                  <br>
-                  <small>Category: {{ post.category }}</small>
-                {% endif %}
+                {% if post.tags %}<br><small>Tags: {{ post.tags }}</small>{% endif %}
+                {% if post.category and post.category.strip() %}<br><small>Category: {{ post.category }}</small>{% endif %}
               </td>
               <td class="table-actions">
                 <a class="btn btn-secondary btn-small" href="{{ url_for('edit_post', post_id=post.id) }}">Edit</a>
                 <form class="inline-delete-form" method="post" action="{{ url_for('delete_post_route', post_id=post.id) }}">
-                  <button class="btn btn-danger btn-small" type="submit">Delete</button>
+                  <button class="btn btn-danger btn-small" type="submit" onclick="return confirm('Delete this post permanently?');">Delete</button>
                 </form>
               </td>
             </tr>
@@ -84,27 +75,19 @@
 
   <section>
     <h2>Recent activity</h2>
-    <p class="section-lead">Latest comments on <em>your</em> posts (newest first).</p>
+    <p class="section-lead">Newest comments on your posts.</p>
     {% if recent_comments %}
       <ul class="activity-list">
         {% for row in recent_comments %}
           <li class="activity-item">
-            <p class="activity-meta">
-              <strong>{{ row.commenter_display_name }}</strong>
-              <span class="activity-username">(@{{ row.commenter_username }})</span>
-              · {{ row.created_at }}
-            </p>
-            <p class="activity-post">
-              On:
-              <a href="{{ url_for('edit_post', post_id=row.post_id) }}">{{ row.post_title }}</a>
-              <span class="muted">(open in editor)</span>
-            </p>
+            <p class="activity-meta"><strong>{{ row.commenter_display_name }}</strong> <span class="activity-username">(@{{ row.commenter_username }})</span> · {{ row.created_at }}</p>
+            <p class="activity-post">On <a href="{{ url_for('edit_post', post_id=row.post_id) }}">{{ row.post_title }}</a> <span class="muted">(open editor)</span></p>
             <p class="activity-preview">{{ row.body | truncate(160, True, "...") }}</p>
           </li>
         {% endfor %}
       </ul>
     {% else %}
-      <p class="empty-state">No comments on your posts yet. When someone comments on a post you wrote, it will appear here.</p>
+      <p class="empty-state">No comments on your posts yet.</p>
     {% endif %}
   </section>
 
@@ -113,14 +96,11 @@
     {% if bookmarked_posts %}
       <ul>
         {% for post in bookmarked_posts %}
-          <li>
-            <a href="{{ url_for('post_detail', slug=post.slug) }}">{{ post.title }}</a>
-            <span class="muted">by {{ post.display_name }} · {{ post.created_at }}</span>
-          </li>
+          <li><a href="{{ url_for('post_detail', slug=post.slug) }}">{{ post.title }}</a> <span class="muted">by {{ post.display_name }} · {{ post.created_at }}</span></li>
         {% endfor %}
       </ul>
     {% else %}
-      <p class="empty-state">You have not bookmarked any posts. Open a public post and use <strong>Bookmark</strong> to save it here.</p>
+      <p class="empty-state">No bookmarks yet. Use Bookmark on any public post to save it here.</p>
     {% endif %}
   </section>
 {% endblock %}

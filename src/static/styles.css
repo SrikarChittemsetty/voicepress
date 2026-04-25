@@ -575,3 +575,40 @@ td img {
   background: #fff5f5;
   border-color: #fecaca;
 }
+
+
+.hero-panel {
+  background: #ffffff;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+}
+
+.hero-lead {
+  margin-top: 0.5rem;
+  font-size: 1.02rem;
+  color: #374151;
+  max-width: 52rem;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.post-detail-card {
+  background: #fff;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+}
+
+.post-excerpt {
+  color: #374151;
+}
+
+.post-body {
+  margin-top: 0.85rem;
+}

@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}New Post - New Project Blog{% endblock %}
+{% block title %}New Post - VoicePress{% endblock %}
 
 {% block content %}
   <h1>Create New Post</h1>
+  <p class="section-lead">Write in Markdown, use free browser dictation if available, then choose how and when the post is visible.</p>
+
   <form method="post" action="{{ url_for('new_post') }}">
     <div>
       <label for="title">Title</label><br>
@@ -16,14 +18,10 @@
       <div class="dictation-toolbar" aria-label="Voice dictation and text cleanup">
         <button type="button" class="btn btn-secondary btn-small" id="dictation-start">Start dictation</button>
         <button type="button" class="btn btn-secondary btn-small" id="dictation-stop" disabled>Stop dictation</button>
-        <button type="button" class="btn btn-secondary btn-small" id="cleanup-text-btn" title="Runs simple rules on the selection, or the whole body if nothing is selected">
-          Clean up text
-        </button>
+        <button type="button" class="btn btn-secondary btn-small" id="cleanup-text-btn" title="Runs simple rules on the selection, or the whole body if nothing is selected">Clean up text</button>
         <p id="dictation-status" class="dictation-status" role="status"></p>
       </div>
-      <p class="cleanup-hint muted">
-        <strong>Basic local cleanup (not AI):</strong> trims spaces, fixes simple capitals and end punctuation, and turns spoken words like “comma” into commas. Select part of the body to clean only that part.
-      </p>
+      <p class="cleanup-hint muted"><strong>Browser dictation is free but browser-dependent:</strong> quality and support vary by browser and device. The cleanup button uses local rules only (not AI).</p>
       <p>Markdown tips: <code># Heading</code>, <code>**bold**</code>, <code>*italic*</code>, <code>- list item</code>, <code>[link text](https://example.com)</code></p>
       <div class="markdown-preview">
         <h3>Live Preview</h3>
@@ -33,17 +31,14 @@
 
     <div>
       <label for="excerpt">Excerpt (optional)</label><br>
-      <textarea id="excerpt" name="excerpt" rows="3" cols="60" placeholder="Short summary shown in previews"></textarea>
+      <textarea id="excerpt" name="excerpt" rows="3" cols="60" placeholder="Short summary shown in feeds and cards"></textarea>
+      <p class="muted">Tip: 1-2 lines usually works best in cards.</p>
     </div>
 
     <div>
       <label for="cover_image_url">Cover Image URL (optional)</label><br>
-      <input
-        id="cover_image_url"
-        name="cover_image_url"
-        type="url"
-        placeholder="https://example.com/image.jpg"
-      >
+      <input id="cover_image_url" name="cover_image_url" type="url" placeholder="https://example.com/image.jpg">
+      <p class="muted">Use a direct image URL so readers can see a visual preview.</p>
     </div>
 
     <div>
@@ -52,6 +47,7 @@
         <option value="public">Public</option>
         <option value="private">Private</option>
       </select>
+      <p class="muted">Public posts can appear in feeds and author pages. Private posts stay visible only to you in the dashboard.</p>
     </div>
 
     <div>
@@ -60,16 +56,19 @@
         <option value="draft">Draft</option>
         <option value="published">Published</option>
       </select>
+      <p class="muted">Draft keeps the post out of public pages. Published allows public visibility only when visibility is Public.</p>
     </div>
 
     <div>
       <label for="tags">Tags</label><br>
       <input id="tags" name="tags" type="text" placeholder="python, flask, sqlite">
+      <p class="muted">Use comma-separated keywords for cross-topic discovery.</p>
     </div>
 
     <div>
       <label for="category">Category (optional)</label><br>
       <input id="category" name="category" type="text" placeholder="e.g. Tutorials">
+      <p class="muted">Use one broad bucket such as Tutorials, Updates, or Notes.</p>
     </div>
 
     <button class="btn" type="submit">Save post</button>

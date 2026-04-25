@@ -1,78 +1,59 @@
 {% extends "base.html" %}
 
-{% block title %}{{ post.title }} - New Project Blog{% endblock %}
+{% block title %}{{ post.title }} - VoicePress{% endblock %}
 
 {% block content %}
-  <article>
-    <h1>{{ post.title }}</h1>
-    {% if post.cover_image_url %}
-      <p><img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}"></p>
-    {% endif %}
-    <p>By <a href="{{ url_for('user_blog', username=post.username) }}">{{ post.display_name }}</a> on {{ post.created_at }}</p>
-    {% if post.category and post.category.strip() %}
-      <p>
-        Category:
-        <a href="{{ url_for('category_posts', category=post.category.strip()) }}">{{ post.category.strip() }}</a>
-      </p>
-    {% endif %}
-    {% if post.excerpt %}
-      <p>{{ post.excerpt }}</p>
-    {% endif %}
-    {% if post.tags %}
-      <p>
-        Tags:
-        {% set ns = namespace(first=true) %}
-        {% for tag in post.tags.split(",") %}
-          {% set clean_tag = tag.strip() %}
-          {% if clean_tag %}
-            {% if not ns.first %}, {% endif %}
-            <a href="{{ url_for('tag_posts', tag=clean_tag) }}">{{ clean_tag }}</a>
-            {% set ns.first = false %}
-          {% endif %}
-        {% endfor %}
-      </p>
-    {% endif %}
-    <div>{{ post.body | markdown }}</div>
+  <article class="post-detail-card">
+    <header>
+      <h1>{{ post.title }}</h1>
+      <p class="section-lead">By <a href="{{ url_for('user_blog', username=post.username) }}">{{ post.display_name }}</a> · {{ post.created_at }}</p>
+      {% if post.cover_image_url %}
+        <p><img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}"></p>
+      {% endif %}
+      {% if post.excerpt %}
+        <p class="post-excerpt"><em>{{ post.excerpt }}</em></p>
+      {% endif %}
+      {% if post.category and post.category.strip() %}
+        <p>Category: <a href="{{ url_for('category_posts', category=post.category.strip()) }}">{{ post.category.strip() }}</a></p>
+      {% endif %}
+      {% if post.tags %}
+        <p>
+          Tags:
+          {% set ns = namespace(first=true) %}
+          {% for tag in post.tags.split(",") %}
+            {% set clean_tag = tag.strip() %}
+            {% if clean_tag %}
+              {% if not ns.first %}, {% endif %}<a href="{{ url_for('tag_posts', tag=clean_tag) }}">{{ clean_tag }}</a>{% set ns.first = false %}
+            {% endif %}
+          {% endfor %}
+        </p>
+      {% endif %}
+    </header>
+
+    <div class="post-body">{{ post.body | markdown }}</div>
   </article>
 
   <section>
-    <h2>Likes</h2>
+    <h2>Engagement</h2>
     <p>{{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}</p>
     {% if session.get("username") %}
       {% if is_liked %}
-        <form class="form-compact" method="post" action="{{ url_for('unlike_post', post_id=post.id) }}">
-          <button class="btn btn-secondary" type="submit">Unlike</button>
-        </form>
+        <form class="form-compact" method="post" action="{{ url_for('unlike_post', post_id=post.id) }}"><button class="btn btn-secondary" type="submit">Unlike</button></form>
       {% else %}
-        <form class="form-compact" method="post" action="{{ url_for('like_post', post_id=post.id) }}">
-          <button class="btn btn-secondary" type="submit">Like</button>
-        </form>
+        <form class="form-compact" method="post" action="{{ url_for('like_post', post_id=post.id) }}"><button class="btn btn-secondary" type="submit">Like</button></form>
       {% endif %}
-    {% else %}
-      <p><a href="{{ url_for('login') }}">Log in</a> to like this post.</p>
-    {% endif %}
-  </section>
-
-  <section>
-    <h2>Bookmark</h2>
-    {% if session.get("username") %}
       {% if is_bookmarked %}
-        <form class="form-compact" method="post" action="{{ url_for('unbookmark_post', post_id=post.id) }}">
-          <button class="btn btn-secondary" type="submit">Remove bookmark</button>
-        </form>
+        <form class="form-compact" method="post" action="{{ url_for('unbookmark_post', post_id=post.id) }}"><button class="btn btn-secondary" type="submit">Remove bookmark</button></form>
       {% else %}
-        <form class="form-compact" method="post" action="{{ url_for('bookmark_post', post_id=post.id) }}">
-          <button class="btn btn-secondary" type="submit">Bookmark</button>
-        </form>
+        <form class="form-compact" method="post" action="{{ url_for('bookmark_post', post_id=post.id) }}"><button class="btn btn-secondary" type="submit">Bookmark</button></form>
       {% endif %}
     {% else %}
-      <p><a href="{{ url_for('login') }}">Log in</a> to bookmark this post.</p>
+      <p><a href="{{ url_for('login') }}">Log in</a> to like or bookmark this post.</p>
     {% endif %}
   </section>
 
   <section>
     <h2>Comments</h2>
-
     {% if session.get("username") %}
       <form method="post" action="{{ url_for('post_detail', slug=post.slug) }}">
         <label for="comment-body">Add a comment</label><br>
@@ -86,7 +67,7 @@
     <ul>
       {% for comment in comments %}
         <li>
-          <p><strong>{{ comment.display_name }}</strong> (@{{ comment.username }}) on {{ comment.created_at }}</p>
+          <p><strong>{{ comment.display_name }}</strong> (@{{ comment.username }}) · {{ comment.created_at }}</p>
           <p>{{ comment.body }}</p>
           {% if session.get("username") == comment.username %}
             <form class="form-compact" method="post" action="{{ url_for('delete_comment_route', comment_id=comment.id) }}">

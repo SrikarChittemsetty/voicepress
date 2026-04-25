@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Account settings - New Project Blog{% endblock %}
+{% block title %}Account Settings - VoicePress{% endblock %}
 
 {% block content %}
-  <h1>Account settings</h1>
-  <p class="section-lead">Signed in as <strong>{{ username }}</strong>. Your password is never shown on this page.</p>
+  <h1>Account Settings</h1>
+  <p class="section-lead">Signed in as <strong>{{ username }}</strong>. Password hashes are never shown.</p>
 
   <section class="settings-card">
     <h2>Change password</h2>
-    <p>Enter your current password, then choose a new one (at least 8 characters). You will stay logged in after a successful change.</p>
+    <p>Enter your current password, then choose and confirm a new one. You stay logged in after a successful change.</p>
     <form method="post" action="{{ url_for('settings') }}">
       <input type="hidden" name="action" value="change_password">
       <div>
@@ -17,11 +17,11 @@
       </div>
       <div>
         <label for="new_password">New password</label><br>
-        <input id="new_password" name="new_password" type="password" required minlength="8" autocomplete="new-password">
+        <input id="new_password" name="new_password" type="password" required autocomplete="new-password">
       </div>
       <div>
         <label for="new_password_confirm">Confirm new password</label><br>
-        <input id="new_password_confirm" name="new_password_confirm" type="password" required minlength="8" autocomplete="new-password">
+        <input id="new_password_confirm" name="new_password_confirm" type="password" required autocomplete="new-password">
       </div>
       <button class="btn" type="submit">Update password</button>
     </form>
@@ -29,7 +29,7 @@
 
   <section class="danger-zone" aria-labelledby="danger-heading">
     <h2 id="danger-heading">Danger zone</h2>
-    <p><strong>Deleting your account cannot be undone.</strong> All of your posts, comments you wrote, likes, and bookmarks will be removed. Comments and engagement from other people on <em>your</em> posts will also be deleted with those posts.</p>
+    <p><strong>Deleting your account is permanent.</strong> Your posts, comments, likes, and bookmarks will be removed. Engagement by other users on your posts is also removed to prevent orphaned data.</p>
     <form method="post" action="{{ url_for('settings') }}" class="delete-account-form" onsubmit="return confirm('Are you sure you want to permanently delete your account? This cannot be undone.');">
       <input type="hidden" name="action" value="delete_account">
       <div>

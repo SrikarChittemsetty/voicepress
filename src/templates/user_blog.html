@@ -1,61 +1,37 @@
 {% extends "base.html" %}
 
-{% block title %}{{ profile.display_name }} (@{{ profile.username }}) - New Project Blog{% endblock %}
+{% block title %}{{ profile.display_name }} (@{{ profile.username }}) - VoicePress{% endblock %}
 
 {% block content %}
   <header class="author-blog-header">
     <h1 class="author-blog-title">{{ profile.display_name }}</h1>
     <p class="author-blog-handle">@{{ profile.username }}</p>
-    <p class="author-blog-stats">
-      <strong>{{ posts | length }}</strong> public post{% if (posts | length) != 1 %}s{% endif %} on this blog
-    </p>
+    <p class="author-blog-stats"><strong>{{ posts | length }}</strong> public post{% if (posts | length) != 1 %}s{% endif %}</p>
     {% if profile.bio and profile.bio.strip() %}
-      <div class="author-blog-bio">
-        <h2 class="visually-hidden">About</h2>
-        <p>{{ profile.bio }}</p>
-      </div>
+      <div class="author-blog-bio"><h2 class="visually-hidden">About this author</h2><p>{{ profile.bio }}</p></div>
     {% else %}
       <p class="muted">This author has not added a bio yet.</p>
     {% endif %}
   </header>
 
   <section aria-labelledby="posts-heading">
-    <h2 id="posts-heading">Posts</h2>
+    <h2 id="posts-heading">Published posts</h2>
     <ul>
       {% for post in posts %}
         <li>
           <h3>{{ post.title }}</h3>
-          {% if post.cover_image_url %}
-            <p><img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}"></p>
-          {% endif %}
+          {% if post.cover_image_url %}<p><img src="{{ post.cover_image_url }}" alt="Cover image for {{ post.title }}"></p>{% endif %}
           <p>{{ post.created_at }}</p>
           <p>{{ post.excerpt if post.excerpt else post.body | truncate(140, True, "...") }}</p>
-          <p>{{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %}</p>
-          <p>{{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}</p>
-          {% if post.category and post.category.strip() %}
-            <p>
-              Category:
-              <a href="{{ url_for('category_posts', category=post.category.strip()) }}">{{ post.category.strip() }}</a>
-            </p>
-          {% endif %}
+          <p>{{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %} · {{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}</p>
+          {% if post.category and post.category.strip() %}<p>Category: <a href="{{ url_for('category_posts', category=post.category.strip()) }}">{{ post.category.strip() }}</a></p>{% endif %}
           {% if post.tags %}
-            <p>
-              Tags:
-              {% set ns = namespace(first=true) %}
-              {% for tag in post.tags.split(",") %}
-                {% set clean_tag = tag.strip() %}
-                {% if clean_tag %}
-                  {% if not ns.first %}, {% endif %}
-                  <a href="{{ url_for('tag_posts', tag=clean_tag) }}">{{ clean_tag }}</a>
-                  {% set ns.first = false %}
-                {% endif %}
-              {% endfor %}
-            </p>
+            <p>Tags:{% set ns = namespace(first=true) %}{% for tag in post.tags.split(",") %}{% set clean_tag = tag.strip() %}{% if clean_tag %}{% if not ns.first %}, {% endif %}<a href="{{ url_for('tag_posts', tag=clean_tag) }}">{{ clean_tag }}</a>{% set ns.first = false %}{% endif %}{% endfor %}</p>
           {% endif %}
           <p><a href="{{ url_for('post_detail', slug=post.slug) }}">Read full post</a></p>
         </li>
       {% else %}
-        <li><p class="empty-state">{{ profile.display_name }} has not published any public posts yet. When they publish something visible to everyone, it will show up here.</p></li>
+        <li><p class="empty-state">{{ profile.display_name }} has not published any public posts yet.</p></li>
       {% endfor %}
     </ul>
   </section>

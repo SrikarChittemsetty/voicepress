@@ -14,3 +14,6 @@ build/
 .vscode/
 app.db
 
+.env
+.env.*
+!.env.example

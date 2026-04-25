@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block title %}Something Went Wrong - VoicePress{% endblock %}
+
+{% block content %}
+  <h1>Something went wrong</h1>
+  <p class="empty-state">VoicePress hit an unexpected error. Please try again in a moment.</p>
+  <p><a class="btn" href="{{ url_for('home') }}">Back to home</a></p>
+{% endblock %}

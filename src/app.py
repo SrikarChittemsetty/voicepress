@@ -11,7 +11,8 @@ from markupsafe import Markup
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-app.secret_key = "dev-secret-key"
+# Use env SECRET_KEY when provided (production), otherwise a local-dev fallback.
+app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
 
 
 def get_database_path() -> Path:
@@ -1066,6 +1067,11 @@ def page_not_found(_e):
     return render_template("404.html"), 404
 
 
+@app.errorhandler(500)
+def internal_server_error(_e):
+    return render_template("500.html"), 500
+
+
 @app.route("/")
 def home() -> str:
     q = request.args.get("q", "").strip()
@@ -1403,8 +1409,6 @@ def settings():
                 flash("Please enter and confirm your new password.")
             elif new_password != confirm:
                 flash("New password and confirmation do not match.")
-            elif len(new_password) < 8:
-                flash("New password must be at least 8 characters.")
             else:
                 ok, msg = update_password_for_user(username, current_password, new_password)
                 flash(msg)

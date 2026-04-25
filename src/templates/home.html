@@ -1,23 +1,29 @@
 {% extends "base.html" %}
 
-{% block title %}Home - New Project Blog{% endblock %}
+{% block title %}Home - VoicePress{% endblock %}
 
 {% block content %}
-  <h1>Home</h1>
-  {% if session.get("username") %}
-    <p>Welcome back, {{ session["username"] }}.</p>
-    <p><a href="{{ url_for('dashboard') }}">Go to your dashboard</a></p>
-  {% else %}
-    <p>Welcome to the home page.</p>
-    <p>Create an account or log in to access your writing dashboard.</p>
-  {% endif %}
+  <section class="hero-panel">
+    <h1>VoicePress</h1>
+    <p class="hero-lead">A multi-user writing platform for drafting with your keyboard or free browser dictation, then publishing polished posts with Markdown.</p>
+    <p class="hero-actions">
+      {% if session.get("username") %}
+        <a class="btn" href="{{ url_for('new_post') }}">Start writing</a>
+        <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">Writer control center</a>
+      {% else %}
+        <a class="btn" href="{{ url_for('register') }}">Register</a>
+        <a class="btn btn-secondary" href="{{ url_for('login') }}">Log in</a>
+      {% endif %}
+      <a class="btn btn-secondary" href="{{ url_for('authors') }}">Browse authors</a>
+    </p>
+  </section>
 
   <section class="home-recent" aria-labelledby="recent-heading">
     <h2 id="recent-heading">Recent posts</h2>
-    <p class="section-lead">Latest public published posts, newest first. Use search to filter by title, body, or tags.</p>
+    <p class="section-lead">Latest public published posts, newest first. Search checks title, body, and tags.</p>
     <form method="get" action="{{ url_for('home') }}">
       <label for="q">Search posts</label>
-      <input id="q" name="q" type="text" value="{{ q }}" placeholder="Search title or body">
+      <input id="q" name="q" type="text" value="{{ q }}" placeholder="Search title, body, or tags">
       <button class="btn" type="submit">Search</button>
     </form>
 
@@ -30,13 +36,9 @@
           {% endif %}
           <p>By <a href="{{ url_for('user_blog', username=post.username) }}">{{ post.display_name }}</a> on {{ post.created_at }}</p>
           <p>{{ post.excerpt if post.excerpt else post.body | truncate(140, True, "...") }}</p>
-          <p>{{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %}</p>
-          <p>{{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}</p>
+          <p>{{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %} · {{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}</p>
           {% if post.category and post.category.strip() %}
-            <p>
-              Category:
-              <a href="{{ url_for('category_posts', category=post.category.strip()) }}">{{ post.category.strip() }}</a>
-            </p>
+            <p>Category: <a href="{{ url_for('category_posts', category=post.category.strip()) }}">{{ post.category.strip() }}</a></p>
           {% endif %}
           {% if post.tags %}
             <p>
@@ -45,9 +47,7 @@
               {% for tag in post.tags.split(",") %}
                 {% set clean_tag = tag.strip() %}
                 {% if clean_tag %}
-                  {% if not ns.first %}, {% endif %}
-                  <a href="{{ url_for('tag_posts', tag=clean_tag) }}">{{ clean_tag }}</a>
-                  {% set ns.first = false %}
+                  {% if not ns.first %}, {% endif %}<a href="{{ url_for('tag_posts', tag=clean_tag) }}">{{ clean_tag }}</a>{% set ns.first = false %}
                 {% endif %}
               {% endfor %}
             </p>
@@ -58,7 +58,7 @@
         {% if q %}
           <li><p class="empty-state">No public published posts matched your search. Try different words or <a href="{{ url_for('home') }}">clear the search</a>.</p></li>
         {% else %}
-          <li><p class="empty-state">No public posts yet. Check back soon, or <a href="{{ url_for('register') }}">create an account</a> to start writing.</p></li>
+          <li><p class="empty-state">No public posts yet. Be the first to publish by <a href="{{ url_for('register') }}">creating an account</a>.</p></li>
         {% endif %}
       {% endfor %}
     </ul>
@@ -66,22 +66,18 @@
 
   <section class="home-popular" aria-labelledby="popular-heading">
     <h2 id="popular-heading">Popular posts</h2>
-    <p class="section-lead">Top 5 public posts by likes, then comments (ties favor newer posts).</p>
+    <p class="section-lead">Top 5 public posts ranked by likes, then comments.</p>
     {% if popular_posts %}
       <ol class="popular-posts-list">
         {% for post in popular_posts %}
           <li>
             <a href="{{ url_for('post_detail', slug=post.slug) }}">{{ post.title }}</a>
-            <span class="popular-posts-meta muted">
-              by {{ post.display_name }}
-              · {{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %}
-              · {{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %}
-            </span>
+            <span class="popular-posts-meta muted">by {{ post.display_name }} · {{ post.like_count }} like{% if post.like_count != 1 %}s{% endif %} · {{ post.comment_count }} comment{% if post.comment_count != 1 %}s{% endif %}</span>
           </li>
         {% endfor %}
       </ol>
     {% else %}
-      <p class="empty-state">No popular posts yet. Likes and comments will fill this list as readers engage.</p>
+      <p class="empty-state">No popular posts yet. As readers like and comment, this list will fill in.</p>
     {% endif %}
   </section>
 {% endblock %}
