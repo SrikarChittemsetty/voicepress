@@ -156,3 +156,26 @@ ul {
 li {
   margin-bottom: 0.55rem;
 }
+
+.markdown-preview {
+  margin-top: 0.8rem;
+  max-width: 640px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 0.75rem;
+}
+
+.markdown-preview h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.markdown-preview-content {
+  min-height: 60px;
+}
+
+.markdown-preview-content p,
+.markdown-preview-content ul {
+  margin: 0.45rem 0;
+}

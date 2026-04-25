@@ -14,6 +14,10 @@
       <label for="body">Body</label><br>
       <textarea id="body" name="body" rows="10" cols="60" required>{{ post.body }}</textarea>
       <p>Markdown tips: <code># Heading</code>, <code>**bold**</code>, <code>*italic*</code>, <code>- list item</code>, <code>[link text](https://example.com)</code></p>
+      <div class="markdown-preview">
+        <h3>Live Preview</h3>
+        <div id="markdown-preview-content" class="markdown-preview-content"></div>
+      </div>
     </div>
 
     <div>
@@ -39,4 +43,65 @@
 
     <button type="submit">Save Changes</button>
   </form>
+
+  <script>
+    (function () {
+      const bodyInput = document.getElementById("body");
+      const preview = document.getElementById("markdown-preview-content");
+
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      function inlineMarkdown(text) {
+        let html = text;
+        html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+        return html;
+      }
+
+      function renderPreview() {
+        const raw = bodyInput.value || "";
+        const lines = raw.split("\n");
+        const htmlParts = [];
+        let listItems = [];
+
+        function flushList() {
+          if (listItems.length > 0) {
+            htmlParts.push("<ul>" + listItems.join("") + "</ul>");
+            listItems = [];
+          }
+        }
+
+        for (const line of lines) {
+          const safeLine = escapeHtml(line.trim());
+          if (safeLine.startsWith("- ")) {
+            listItems.push("<li>" + inlineMarkdown(safeLine.slice(2)) + "</li>");
+            continue;
+          }
+
+          flushList();
+
+          if (!safeLine) {
+            htmlParts.push("<br>");
+            continue;
+          }
+
+          if (safeLine.startsWith("# ")) {
+            htmlParts.push("<h1>" + inlineMarkdown(safeLine.slice(2)) + "</h1>");
+          } else {
+            htmlParts.push("<p>" + inlineMarkdown(safeLine) + "</p>");
+          }
+        }
+
+        flushList();
+        preview.innerHTML = htmlParts.join("");
+      }
+
+      bodyInput.addEventListener("input", renderPreview);
+      renderPreview();
+    })();
+  </script>
 {% endblock %}
