@@ -21,6 +21,11 @@
     </div>
 
     <div>
+      <label for="excerpt">Excerpt (optional)</label><br>
+      <textarea id="excerpt" name="excerpt" rows="3" cols="60" placeholder="Short summary shown in previews">{{ post.excerpt }}</textarea>
+    </div>
+
+    <div>
       <label for="visibility">Visibility</label><br>
       <select id="visibility" name="visibility">
         <option value="public" {% if post.visibility == "public" %}selected{% endif %}>Public</option>

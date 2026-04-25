@@ -65,6 +65,7 @@ def init_db() -> None:
             user_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             body TEXT NOT NULL,
+            excerpt TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             visibility TEXT NOT NULL DEFAULT 'public',
             status TEXT NOT NULL DEFAULT 'draft',
@@ -109,6 +110,7 @@ def init_db() -> None:
     ensure_posts_visibility_column(conn)
     ensure_posts_status_column(conn)
     ensure_posts_tags_column(conn)
+    ensure_posts_excerpt_column(conn)
     ensure_posts_slug_column(conn)
     ensure_posts_slug_unique_index(conn)
     backfill_post_slugs(conn)
@@ -139,6 +141,13 @@ def ensure_posts_tags_column(conn: sqlite3.Connection) -> None:
     has_tags_column = any(column["name"] == "tags" for column in columns)
     if not has_tags_column:
         conn.execute("ALTER TABLE posts ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
+
+
+def ensure_posts_excerpt_column(conn: sqlite3.Connection) -> None:
+    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
+    has_excerpt_column = any(column["name"] == "excerpt" for column in columns)
+    if not has_excerpt_column:
+        conn.execute("ALTER TABLE posts ADD COLUMN excerpt TEXT NOT NULL DEFAULT ''")
 
 
 def ensure_posts_slug_column(conn: sqlite3.Connection) -> None:
@@ -289,7 +298,13 @@ def backfill_post_slugs(conn: sqlite3.Connection) -> None:
 
 
 def create_post(
-    username: str, title: str, body: str, visibility: str, status: str, tags: str
+    username: str,
+    title: str,
+    body: str,
+    excerpt: str,
+    visibility: str,
+    status: str,
+    tags: str,
 ) -> bool:
     user = get_user_by_username(username)
     if not user:
@@ -300,10 +315,10 @@ def create_post(
     conn = get_db_connection()
     conn.execute(
         """
-        INSERT INTO posts (user_id, title, body, created_at, visibility, status, tags, slug)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO posts (user_id, title, body, excerpt, created_at, visibility, status, tags, slug)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (user["id"], title, body, created_at, visibility, status, tags, slug),
+        (user["id"], title, body, excerpt, created_at, visibility, status, tags, slug),
     )
     conn.commit()
     conn.close()
@@ -318,7 +333,7 @@ def get_posts_for_user(username: str) -> list[sqlite3.Row]:
     conn = get_db_connection()
     posts = conn.execute(
         """
-        SELECT id, title, body, created_at, visibility, status, tags
+        SELECT id, title, body, excerpt, created_at, visibility, status, tags
         FROM posts
         WHERE user_id = ?
         ORDER BY created_at DESC
@@ -336,6 +351,7 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
         posts = conn.execute(
             """
             SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
+                   , posts.excerpt
                    , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
                    , posts.tags
                    , posts.slug
@@ -360,6 +376,7 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
         posts = conn.execute(
             """
             SELECT posts.id, posts.title, posts.body, posts.created_at, users.username
+                   , posts.excerpt
                    , COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name
                    , posts.tags
                    , posts.slug
@@ -391,6 +408,7 @@ def get_public_post_by_id(post_id: int) -> sqlite3.Row | None:
     post = conn.execute(
         """
         SELECT posts.id, posts.title, posts.body, posts.created_at, users.username,
+               posts.excerpt,
                COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name,
                posts.tags, posts.slug,
                (
@@ -413,6 +431,7 @@ def get_public_post_by_slug(slug: str) -> sqlite3.Row | None:
     post = conn.execute(
         """
         SELECT posts.id, posts.title, posts.body, posts.created_at, users.username,
+               posts.excerpt,
                COALESCE(NULLIF(users.display_name, ''), users.username) AS display_name,
                posts.tags, posts.slug,
                (
@@ -438,7 +457,7 @@ def get_public_posts_for_username(username: str) -> list[sqlite3.Row] | None:
     conn = get_db_connection()
     posts = conn.execute(
         """
-        SELECT posts.id, posts.title, posts.body, posts.created_at, posts.tags, posts.slug,
+        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.created_at, posts.tags, posts.slug,
                (
                    SELECT COUNT(*)
                    FROM comments
@@ -468,7 +487,7 @@ def get_public_posts_by_tag(tag: str) -> list[sqlite3.Row]:
     conn = get_db_connection()
     posts = conn.execute(
         """
-        SELECT posts.id, posts.title, posts.body, posts.created_at, posts.tags, posts.slug,
+        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.created_at, posts.tags, posts.slug,
                (
                    SELECT COUNT(*)
                    FROM comments
@@ -498,7 +517,7 @@ def get_post_for_owner(post_id: int, username: str) -> sqlite3.Row | None:
     conn = get_db_connection()
     post = conn.execute(
         """
-        SELECT posts.id, posts.title, posts.body, posts.created_at, posts.visibility, posts.status, posts.tags, posts.slug
+        SELECT posts.id, posts.title, posts.body, posts.excerpt, posts.created_at, posts.visibility, posts.status, posts.tags, posts.slug
         FROM posts
         JOIN users ON posts.user_id = users.id
         WHERE posts.id = ? AND users.username = ?
@@ -700,6 +719,7 @@ def update_post(
     username: str,
     title: str,
     body: str,
+    excerpt: str,
     visibility: str,
     status: str,
     tags: str,
@@ -709,7 +729,7 @@ def update_post(
     result = conn.execute(
         """
         UPDATE posts
-        SET title = ?, body = ?, visibility = ?, status = ?, tags = ?, slug = ?
+        SET title = ?, body = ?, excerpt = ?, visibility = ?, status = ?, tags = ?, slug = ?
         WHERE id = (
             SELECT posts.id
             FROM posts
@@ -717,7 +737,7 @@ def update_post(
             WHERE posts.id = ? AND users.username = ?
         )
         """,
-        (title, body, visibility, status, tags, slug, post_id, username),
+        (title, body, excerpt, visibility, status, tags, slug, post_id, username),
     )
     conn.commit()
     conn.close()
@@ -789,6 +809,7 @@ def new_post():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         body = request.form.get("body", "").strip()
+        excerpt = request.form.get("excerpt", "").strip()
         tags = request.form.get("tags", "").strip()
         visibility = request.form.get("visibility", "public")
         if visibility not in {"public", "private"}:
@@ -801,7 +822,7 @@ def new_post():
             flash("Title and body are required.")
             return redirect(url_for("new_post"))
 
-        create_post(session["username"], title, body, visibility, status, tags)
+        create_post(session["username"], title, body, excerpt, visibility, status, tags)
         flash("Post created.")
         return redirect(url_for("dashboard"))
 
@@ -932,6 +953,7 @@ def edit_post(post_id: int):
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         body = request.form.get("body", "").strip()
+        excerpt = request.form.get("excerpt", "").strip()
         tags = request.form.get("tags", "").strip()
         visibility = request.form.get("visibility", "public")
         if visibility not in {"public", "private"}:
@@ -944,7 +966,7 @@ def edit_post(post_id: int):
             flash("Title and body are required.")
             return redirect(url_for("edit_post", post_id=post_id))
 
-        update_post(post_id, username, title, body, visibility, status, tags)
+        update_post(post_id, username, title, body, excerpt, visibility, status, tags)
         flash("Post updated.")
         return redirect(url_for("dashboard"))
 

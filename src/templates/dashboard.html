@@ -29,7 +29,7 @@
             <td>{{ post.status }}</td>
             <td>{{ post.created_at }}</td>
             <td>
-              {{ post.body | truncate(100, True, "...") }}
+              {{ post.excerpt if post.excerpt else post.body | truncate(100, True, "...") }}
               {% if post.tags %}
                 <br>
                 <small>Tags: {{ post.tags }}</small>
