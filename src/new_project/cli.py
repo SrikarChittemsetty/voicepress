@@ -2,7 +2,7 @@ import argparse
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="new-project", description="Starter CLI for new-project.")
+    p = argparse.ArgumentParser(prog="voicepress", description="Utility CLI for the VoicePress project.")
     p.add_argument("--name", default="world", help="Who to greet.")
     return p
 

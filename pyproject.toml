@@ -3,13 +3,13 @@ requires = ["hatchling>=1.24.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "new-project"
+name = "voicepress"
 version = "0.1.0"
-description = "Starter Python project scaffold."
+description = "VoicePress: a multi-user Flask blogging MVP with dictation-friendly writing tools."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Your Name" }]
+authors = [{ name = "family" }]
 dependencies = [
   "flask>=3.0.0",
   "markdown",
@@ -23,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-new-project = "new_project.cli:main"
+voicepress = "new_project.cli:main"
 
 [tool.ruff]
 line-length = 100
