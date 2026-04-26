@@ -42,12 +42,25 @@ VoicePress is a Flask + SQLite blog platform where users can register, write pub
 
 ## Screenshots
 
-Add screenshots to these paths and update as needed:
+### Home Feed
 
-- `docs/screenshots/home.png`
-- `docs/screenshots/dashboard.png`
-- `docs/screenshots/editor-dictation.png`
-- `docs/screenshots/post-detail.png`
+![VoicePress home feed](docs/screenshots/home.png)
+
+### Writer Dashboard
+
+![VoicePress writer dashboard](docs/screenshots/dashboard.png)
+
+### Markdown Editor With Dictation
+
+![VoicePress editor with Markdown preview and browser dictation](docs/screenshots/editor.png)
+
+### Public Post Detail
+
+![VoicePress public post detail page](docs/screenshots/post-detail.png)
+
+### Author Blog Page
+
+![VoicePress author blog page](docs/screenshots/author-page.png)
 
 ## Local Setup
 
