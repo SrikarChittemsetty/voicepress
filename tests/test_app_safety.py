@@ -249,6 +249,81 @@ def test_custom_404_page(app_bundle):
     assert b"Back to home" in r.data
 
 
+def test_api_posts_list_returns_only_public_published(app_bundle):
+    c = app_bundle.client
+    _register(c, "api_writer", "api-pass-11")
+    _login(c, "api_writer", "api-pass-11")
+    _new_post(c, "Public Published", "Body A", "public", "published")
+    _new_post(c, "Private Published", "Body B", "private", "published")
+    _new_post(c, "Public Draft", "Body C", "public", "draft")
+
+    r = c.get("/api/posts")
+    assert r.status_code == 200
+    payload = r.get_json()
+    assert isinstance(payload, list)
+    assert len(payload) == 1
+    assert payload[0]["title"] == "Public Published"
+    assert payload[0]["slug"]
+    assert "body" not in payload[0]
+    assert "excerpt" in payload[0]
+    assert "cover_image_url" in payload[0]
+    assert "created_at" in payload[0]
+    assert "tags" in payload[0]
+    assert "category" in payload[0]
+
+
+def test_api_post_detail_returns_public_published_post(app_bundle):
+    m = app_bundle.m
+    c = app_bundle.client
+    _register(c, "detail_writer", "detail-pass-10")
+    _login(c, "detail_writer", "detail-pass-10")
+    _new_post(c, "Detail Post", "Detail body text", "public", "published")
+
+    slug = m.get_public_posts("Detail Post")[0]["slug"]
+    r = c.get(f"/api/posts/{slug}")
+    assert r.status_code == 200
+    payload = r.get_json()
+    assert payload["title"] == "Detail Post"
+    assert payload["slug"] == slug
+    assert payload["body"] == "Detail body text"
+    assert "excerpt" in payload
+    assert "cover_image_url" in payload
+    assert "created_at" in payload
+    assert "tags" in payload
+    assert "category" in payload
+
+
+def test_api_post_detail_404_for_private_draft_or_missing(app_bundle):
+    m = app_bundle.m
+    c = app_bundle.client
+    _register(c, "hidden_writer", "hidden-pass-09")
+    _login(c, "hidden_writer", "hidden-pass-09")
+    _new_post(c, "Private Post", "Private body", "private", "published")
+    _new_post(c, "Draft Post", "Draft body", "public", "draft")
+
+    conn = m.get_db_connection()
+    private_slug = conn.execute(
+        "SELECT slug FROM posts WHERE title = ?",
+        ("Private Post",),
+    ).fetchone()["slug"]
+    draft_slug = conn.execute(
+        "SELECT slug FROM posts WHERE title = ?",
+        ("Draft Post",),
+    ).fetchone()["slug"]
+    conn.close()
+
+    private_r = c.get(f"/api/posts/{private_slug}")
+    draft_r = c.get(f"/api/posts/{draft_slug}")
+    missing_r = c.get("/api/posts/does-not-exist")
+
+    assert private_r.status_code == 404
+    assert private_r.get_json()["error"] == "Post not found"
+    assert draft_r.status_code == 404
+    assert draft_r.get_json()["error"] == "Post not found"
+    assert missing_r.status_code == 404
+    assert missing_r.get_json()["error"] == "Post not found"
+
+
 def test_secret_key_fallback_when_env_not_set(tmp_path, monkeypatch):
     monkeypatch.setenv("NEW_PROJECT_TEST_DB", str(tmp_path / "db.sqlite"))
     monkeypatch.delenv("SECRET_KEY", raising=False)

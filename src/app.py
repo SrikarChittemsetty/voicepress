@@ -6,7 +6,7 @@ import re
 
 import bleach
 import markdown
-from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from markupsafe import Markup
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -518,6 +518,21 @@ def get_public_posts(query: str = "") -> list[sqlite3.Row]:
             """,
             (like_query, like_query, like_query),
         ).fetchall()
+    conn.close()
+    return posts
+
+
+def get_public_posts_for_api() -> list[sqlite3.Row]:
+    """Public, published posts for JSON clients (list view fields only)."""
+    conn = get_db_connection()
+    posts = conn.execute(
+        """
+        SELECT title, slug, excerpt, cover_image_url, created_at, tags, category
+        FROM posts
+        WHERE visibility = 'public' AND status = 'published'
+        ORDER BY created_at DESC
+        """
+    ).fetchall()
     conn.close()
     return posts
 
@@ -1080,6 +1095,44 @@ def home() -> str:
         posts=get_public_posts(q),
         q=q,
         popular_posts=get_popular_public_posts(5),
+    )
+
+
+@app.route("/api/posts")
+def api_posts():
+    posts = get_public_posts_for_api()
+    payload = [
+        {
+            "title": post["title"],
+            "slug": post["slug"],
+            "excerpt": post["excerpt"],
+            "cover_image_url": post["cover_image_url"],
+            "created_at": post["created_at"],
+            "tags": post["tags"],
+            "category": post["category"],
+        }
+        for post in posts
+    ]
+    return jsonify(payload)
+
+
+@app.route("/api/posts/<slug>")
+def api_post_detail(slug: str):
+    post = get_public_post_by_slug(slug)
+    if not post:
+        return jsonify({"error": "Post not found"}), 404
+
+    return jsonify(
+        {
+            "title": post["title"],
+            "slug": post["slug"],
+            "body": post["body"],
+            "excerpt": post["excerpt"],
+            "cover_image_url": post["cover_image_url"],
+            "created_at": post["created_at"],
+            "tags": post["tags"],
+            "category": post["category"],
+        }
     )
 
 
