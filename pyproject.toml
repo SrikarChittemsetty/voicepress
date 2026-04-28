@@ -22,9 +22,6 @@ dev = [
   "ruff>=0.6.0",
 ]
 
-[project.scripts]
-voicepress = "new_project.cli:main"
-
 [tool.ruff]
 line-length = 100
 

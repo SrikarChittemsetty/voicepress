@@ -40,27 +40,11 @@ VoicePress is a Flask + SQLite blog platform where users can register, write pub
   - bookmarked posts
 - Friendly error pages (`404`, `500`)
 
-## Screenshots
+## Demo Preview
 
-### Home Feed
+Screenshots are being refreshed and will be added soon.
 
-![VoicePress home feed](docs/screenshots/home.png)
-
-### Writer Dashboard
-
-![VoicePress writer dashboard](docs/screenshots/dashboard.png)
-
-### Markdown Editor With Dictation
-
-![VoicePress editor with Markdown preview and browser dictation](docs/screenshots/editor.png)
-
-### Public Post Detail
-
-![VoicePress public post detail page](docs/screenshots/post-detail.png)
-
-### Author Blog Page
-
-![VoicePress author blog page](docs/screenshots/author-page.png)
+For now, the fastest way to evaluate VoicePress is the local demo flow below.
 
 ## Local Setup
 
@@ -87,6 +71,28 @@ python src/app.py
 
 Open: `http://127.0.0.1:5000`
 
+## 5-Minute Local Demo
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env
+python src/app.py
+```
+
+Then:
+
+1. Open `http://127.0.0.1:5000`
+2. Create an account from **Register**
+3. Log in and open **Create Post**
+4. Create a post with:
+   - title and body
+   - `visibility = public`
+   - `status = published`
+5. Save the post and verify it appears on the public home feed
+6. Optionally test comments, likes, and bookmarks from another account
+
 ## Run Tests
 
 ```bash
@@ -94,6 +100,12 @@ pytest -q
 ```
 
 Tests use a temporary SQLite database (`NEW_PROJECT_TEST_DB`) so the real `app.db` is not touched.
+
+## Configuration and Security Notes
+
+- Set `SECRET_KEY` in production. The fallback key is only for local development convenience.
+- SQLite works well for local/dev usage. Hosted deployment should use persistent storage to keep post data durable across restarts.
+- VoicePress is an evolving personal publishing tool, currently optimized for learning, iteration, and product polish.
 
 ## Known Limitations
 
