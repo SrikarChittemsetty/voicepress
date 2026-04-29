@@ -10,7 +10,7 @@ VoicePress is a Flask + SQLite blog platform where users can register, write pub
 
 ## Tech Stack
 
-- **Backend:** Python, Flask, SQLite
+- **Backend:** Python, Flask, SQLite locally, Postgres in production
 - **Frontend:** Jinja templates, vanilla JavaScript, CSS
 - **Writing:** Markdown rendering with Bleach sanitization
 - **Testing:** Pytest
@@ -101,23 +101,35 @@ pytest -q
 
 Tests use a temporary SQLite database (`NEW_PROJECT_TEST_DB`) so the real `app.db` is not touched.
 
-## Persistent storage on Render
+## Durable production storage
 
-Render’s **free** filesystem is **ephemeral**: redeploys and restarts can wipe files that are not on a [persistent disk](https://render.com/docs/disks). VoicePress keeps using SQLite, but you should put `app.db` on a disk that survives those events.
+Render’s **free** filesystem is **ephemeral**: redeploys and restarts can wipe files that are not stored outside the running service. For durable posts on a free Render service, use a hosted Postgres database and set:
+
+```bash
+DATABASE_URL=postgresql://user:password@host:5432/database?sslmode=require
+```
+
+VoicePress uses `DATABASE_URL` for production Postgres when it is present. Local development and tests can keep using SQLite.
+
+If you upgrade Render and add a persistent disk later, SQLite can also be made durable:
 
 1. In the Render dashboard, open your **Web Service** → **Disks** → add a **persistent disk**.
-2. Mount it to a path such as **`/var/data`** (create this mount path in the UI; it must exist on the instance for the mount).
-3. Set an environment variable so VoicePress writes the database **on that disk** (the file path’s parent should match the mount):
+2. Mount it to a path such as **`/var/data`**.
+3. Set:
 
    ```bash
    DATABASE_PATH=/var/data/app.db
    ```
 
-   The mount path (e.g. `/var/data`) must be the **parent directory** of the database file (`app.db` lives inside the mounted folder).
-
 4. Redeploy. On first boot, VoicePress creates missing parent directories and opens SQLite at `DATABASE_PATH`.
 
-**Path priority:** `NEW_PROJECT_TEST_DB` (tests only) overrides everything, then `DATABASE_PATH`, then the default `app.db` next to the project root.
+**Storage priority:** `NEW_PROJECT_TEST_DB` (tests only) overrides everything, then `DATABASE_URL`, then `DATABASE_PATH`, then the default local `app.db` next to the project root.
+
+For Render deployment, set the build command to:
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Configuration and Security Notes
 

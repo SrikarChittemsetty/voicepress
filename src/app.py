@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 import re
+from typing import Any
 
 import bleach
 import markdown
@@ -10,9 +11,96 @@ from flask import Flask, abort, flash, jsonify, redirect, render_template, reque
 from markupsafe import Markup
 from werkzeug.security import check_password_hash, generate_password_hash
 
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:  # pragma: no cover - exercised only when optional production dep is absent
+    psycopg = None
+    dict_row = None
+
 app = Flask(__name__)
 # Use env SECRET_KEY when provided (production), otherwise a local-dev fallback.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
+
+
+class PostgresConnection:
+    """Tiny sqlite-shaped wrapper around psycopg for this app's simple query style."""
+
+    backend = "postgres"
+
+    def __init__(self, database_url: str) -> None:
+        if psycopg is None or dict_row is None:
+            raise RuntimeError(
+                "DATABASE_URL is set, but psycopg is not installed. "
+                "Install dependencies with `pip install -r requirements.txt` or `pip install -e .`."
+            )
+        self._conn = psycopg.connect(database_url, row_factory=dict_row)
+
+    def execute(self, sql: str, params: tuple[Any, ...] | list[Any] | None = None):
+        return self._conn.execute(prepare_sql_for_postgres(sql), params or ())
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def rollback(self) -> None:
+        self._conn.rollback()
+
+    def close(self) -> None:
+        self._conn.close()
+
+
+def prepare_sql_for_postgres(sql: str) -> str:
+    """Translate the small SQLite SQL dialect this app uses to psycopg/Postgres."""
+    translated = sql.replace("BEGIN IMMEDIATE", "BEGIN")
+    translated = translated.replace(" COLLATE NOCASE", "")
+    return translated.replace("?", "%s")
+
+
+def uses_postgres() -> bool:
+    """Production uses Postgres when DATABASE_URL is set; tests keep their temp SQLite DB."""
+    return bool(os.environ.get("DATABASE_URL", "").strip()) and not os.environ.get(
+        "NEW_PROJECT_TEST_DB"
+    )
+
+
+def is_postgres_connection(conn: object) -> bool:
+    return getattr(conn, "backend", "") == "postgres"
+
+
+def is_integrity_error(error: Exception) -> bool:
+    postgres_integrity_error = ()
+    if psycopg is not None:
+        postgres_integrity_error = (psycopg.IntegrityError,)
+    return isinstance(error, (sqlite3.IntegrityError, *postgres_integrity_error))
+
+
+def is_database_error(error: Exception) -> bool:
+    postgres_database_error = ()
+    if psycopg is not None:
+        postgres_database_error = (psycopg.Error,)
+    return isinstance(error, (sqlite3.Error, *postgres_database_error))
+
+
+def column_exists(conn: sqlite3.Connection | PostgresConnection, table: str, column: str) -> bool:
+    if is_postgres_connection(conn):
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = ?
+              AND column_name = ?
+            """,
+            (table, column),
+        ).fetchone()
+        return row is not None
+
+    columns = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(existing_column["name"] == column for existing_column in columns)
+
+
+def primary_key_sql() -> str:
+    return "SERIAL PRIMARY KEY" if uses_postgres() else "INTEGER PRIMARY KEY"
 
 
 def get_database_path() -> Path:
@@ -34,7 +122,10 @@ def get_database_path() -> Path:
     return Path(__file__).resolve().parent.parent / "app.db"
 
 
-def get_db_connection() -> sqlite3.Connection:
+def get_db_connection() -> sqlite3.Connection | PostgresConnection:
+    if uses_postgres():
+        return PostgresConnection(os.environ["DATABASE_URL"].strip())
+
     db_path = get_database_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
@@ -69,10 +160,11 @@ def render_markdown(text: str) -> Markup:
 
 def init_db() -> None:
     conn = get_db_connection()
+    id_column = primary_key_sql()
     conn.execute(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
+            id {id_column},
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             display_name TEXT NOT NULL DEFAULT '',
@@ -81,9 +173,9 @@ def init_db() -> None:
         """
     )
     conn.execute(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS posts (
-            id INTEGER PRIMARY KEY,
+            id {id_column},
             user_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             body TEXT NOT NULL,
@@ -99,9 +191,9 @@ def init_db() -> None:
         """
     )
     conn.execute(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS comments (
-            id INTEGER PRIMARY KEY,
+            id {id_column},
             post_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             body TEXT NOT NULL,
@@ -110,9 +202,9 @@ def init_db() -> None:
         """
     )
     conn.execute(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS bookmarks (
-            id INTEGER PRIMARY KEY,
+            id {id_column},
             user_id INTEGER NOT NULL,
             post_id INTEGER NOT NULL,
             created_at TEXT NOT NULL,
@@ -121,9 +213,9 @@ def init_db() -> None:
         """
     )
     conn.execute(
-        """
+        f"""
         CREATE TABLE IF NOT EXISTS likes (
-            id INTEGER PRIMARY KEY,
+            id {id_column},
             user_id INTEGER NOT NULL,
             post_id INTEGER NOT NULL,
             created_at TEXT NOT NULL,
@@ -146,58 +238,44 @@ def init_db() -> None:
     conn.close()
 
 
-def ensure_posts_visibility_column(conn: sqlite3.Connection) -> None:
-    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
-    has_visibility_column = any(column["name"] == "visibility" for column in columns)
-    if not has_visibility_column:
+def ensure_posts_visibility_column(conn: sqlite3.Connection | PostgresConnection) -> None:
+    if not column_exists(conn, "posts", "visibility"):
         conn.execute(
             "ALTER TABLE posts ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'"
         )
 
 
-def ensure_posts_status_column(conn: sqlite3.Connection) -> None:
-    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
-    has_status_column = any(column["name"] == "status" for column in columns)
-    if not has_status_column:
+def ensure_posts_status_column(conn: sqlite3.Connection | PostgresConnection) -> None:
+    if not column_exists(conn, "posts", "status"):
         conn.execute("ALTER TABLE posts ADD COLUMN status TEXT NOT NULL DEFAULT 'draft'")
 
 
-def ensure_posts_tags_column(conn: sqlite3.Connection) -> None:
-    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
-    has_tags_column = any(column["name"] == "tags" for column in columns)
-    if not has_tags_column:
+def ensure_posts_tags_column(conn: sqlite3.Connection | PostgresConnection) -> None:
+    if not column_exists(conn, "posts", "tags"):
         conn.execute("ALTER TABLE posts ADD COLUMN tags TEXT NOT NULL DEFAULT ''")
 
 
-def ensure_posts_excerpt_column(conn: sqlite3.Connection) -> None:
-    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
-    has_excerpt_column = any(column["name"] == "excerpt" for column in columns)
-    if not has_excerpt_column:
+def ensure_posts_excerpt_column(conn: sqlite3.Connection | PostgresConnection) -> None:
+    if not column_exists(conn, "posts", "excerpt"):
         conn.execute("ALTER TABLE posts ADD COLUMN excerpt TEXT NOT NULL DEFAULT ''")
 
 
-def ensure_posts_cover_image_url_column(conn: sqlite3.Connection) -> None:
-    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
-    has_cover_image_url_column = any(column["name"] == "cover_image_url" for column in columns)
-    if not has_cover_image_url_column:
+def ensure_posts_cover_image_url_column(conn: sqlite3.Connection | PostgresConnection) -> None:
+    if not column_exists(conn, "posts", "cover_image_url"):
         conn.execute("ALTER TABLE posts ADD COLUMN cover_image_url TEXT NOT NULL DEFAULT ''")
 
 
-def ensure_posts_category_column(conn: sqlite3.Connection) -> None:
-    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
-    has_category_column = any(column["name"] == "category" for column in columns)
-    if not has_category_column:
+def ensure_posts_category_column(conn: sqlite3.Connection | PostgresConnection) -> None:
+    if not column_exists(conn, "posts", "category"):
         conn.execute("ALTER TABLE posts ADD COLUMN category TEXT NOT NULL DEFAULT ''")
 
 
-def ensure_posts_slug_column(conn: sqlite3.Connection) -> None:
-    columns = conn.execute("PRAGMA table_info(posts)").fetchall()
-    has_slug_column = any(column["name"] == "slug" for column in columns)
-    if not has_slug_column:
+def ensure_posts_slug_column(conn: sqlite3.Connection | PostgresConnection) -> None:
+    if not column_exists(conn, "posts", "slug"):
         conn.execute("ALTER TABLE posts ADD COLUMN slug TEXT")
 
 
-def ensure_posts_slug_unique_index(conn: sqlite3.Connection) -> None:
+def ensure_posts_slug_unique_index(conn: sqlite3.Connection | PostgresConnection) -> None:
     conn.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_slug_unique
@@ -207,17 +285,13 @@ def ensure_posts_slug_unique_index(conn: sqlite3.Connection) -> None:
     )
 
 
-def ensure_users_display_name_column(conn: sqlite3.Connection) -> None:
-    columns = conn.execute("PRAGMA table_info(users)").fetchall()
-    has_display_name_column = any(column["name"] == "display_name" for column in columns)
-    if not has_display_name_column:
+def ensure_users_display_name_column(conn: sqlite3.Connection | PostgresConnection) -> None:
+    if not column_exists(conn, "users", "display_name"):
         conn.execute("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''")
 
 
-def ensure_users_bio_column(conn: sqlite3.Connection) -> None:
-    columns = conn.execute("PRAGMA table_info(users)").fetchall()
-    has_bio_column = any(column["name"] == "bio" for column in columns)
-    if not has_bio_column:
+def ensure_users_bio_column(conn: sqlite3.Connection | PostgresConnection) -> None:
+    if not column_exists(conn, "users", "bio"):
         conn.execute("ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT ''")
 
 
@@ -234,8 +308,10 @@ def create_user(username: str, password: str) -> bool:
         )
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
-        return False
+    except Exception as error:
+        if is_integrity_error(error):
+            return False
+        raise
     finally:
         conn.close()
 
@@ -312,7 +388,7 @@ def generate_slug(title: str, exclude_post_id: int | None = None) -> str:
         candidate = f"{base_slug}-{suffix}"
 
 
-def backfill_post_slugs(conn: sqlite3.Connection) -> None:
+def backfill_post_slugs(conn: sqlite3.Connection | PostgresConnection) -> None:
     posts = conn.execute(
         "SELECT id, title FROM posts WHERE slug IS NULL OR slug = '' ORDER BY id ASC"
     ).fetchall()
@@ -797,8 +873,10 @@ def add_bookmark(post_id: int, username: str) -> bool:
         )
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
-        return False
+    except Exception as error:
+        if is_integrity_error(error):
+            return False
+        raise
     finally:
         conn.close()
 
@@ -875,8 +953,10 @@ def add_like(post_id: int, username: str) -> bool:
         )
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
-        return False
+    except Exception as error:
+        if is_integrity_error(error):
+            return False
+        raise
     finally:
         conn.close()
 
@@ -1074,7 +1154,9 @@ def delete_user_account(username: str, confirmation_username: str) -> tuple[bool
         conn.execute("DELETE FROM posts WHERE user_id = ?", (uid,))
         conn.execute("DELETE FROM users WHERE id = ?", (uid,))
         conn.commit()
-    except sqlite3.Error:
+    except Exception as error:
+        if not is_database_error(error):
+            raise
         conn.rollback()
         conn.close()
         return (False, "Could not delete the account. Please try again.")
