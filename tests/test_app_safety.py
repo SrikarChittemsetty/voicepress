@@ -324,6 +324,18 @@ def test_api_post_detail_404_for_private_draft_or_missing(app_bundle):
     assert missing_r.get_json()["error"] == "Post not found"
 
 
+def test_api_health_reports_database_backend_and_post_count(app_bundle):
+    c = app_bundle.client
+    _register(c, "health_writer", "health-pass-08")
+    _login(c, "health_writer", "health-pass-08")
+    _new_post(c, "Health Post", "Health body", "public", "published")
+
+    r = c.get("/api/health")
+    assert r.status_code == 200
+    payload = r.get_json()
+    assert payload == {"ok": True, "database": "sqlite", "post_count": 1}
+
+
 def test_secret_key_fallback_when_env_not_set(tmp_path, monkeypatch):
     monkeypatch.setenv("NEW_PROJECT_TEST_DB", str(tmp_path / "db.sqlite"))
     monkeypatch.delenv("SECRET_KEY", raising=False)

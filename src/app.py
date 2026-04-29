@@ -431,16 +431,23 @@ def create_post(
     created_at = datetime.now(timezone.utc).isoformat()
     slug = generate_slug(title)
     conn = get_db_connection()
-    conn.execute(
-        """
-        INSERT INTO posts (user_id, title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category, slug)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (user["id"], title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category, slug),
-    )
-    conn.commit()
-    conn.close()
-    return True
+    try:
+        conn.execute(
+            """
+            INSERT INTO posts (user_id, title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category, slug)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (user["id"], title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category, slug),
+        )
+        conn.commit()
+        return True
+    except Exception as error:
+        if is_database_error(error):
+            conn.rollback()
+            return False
+        raise
+    finally:
+        conn.close()
 
 
 DASHBOARD_POST_FILTERS = frozenset({"all", "published", "draft", "public", "private"})
@@ -1231,6 +1238,22 @@ def api_post_detail(slug: str):
     )
 
 
+@app.route("/api/health")
+def api_health():
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT COUNT(*) AS post_count FROM posts").fetchone()
+        return jsonify(
+            {
+                "ok": True,
+                "database": "postgres" if is_postgres_connection(conn) else "sqlite",
+                "post_count": int(row["post_count"] or 0),
+            }
+        )
+    finally:
+        conn.close()
+
+
 @app.route("/authors")
 def authors():
     return render_template("authors.html", authors=get_authors_with_public_posts())
@@ -1296,7 +1319,7 @@ def new_post():
             flash("Title and body are required.")
             return redirect(url_for("new_post"))
 
-        create_post(
+        if not create_post(
             session["username"],
             title,
             body,
@@ -1306,7 +1329,10 @@ def new_post():
             status,
             tags,
             category,
-        )
+        ):
+            flash("Could not create post. Check the database connection and try again.")
+            return redirect(url_for("new_post"))
+
         flash("Post created.")
         return redirect(url_for("dashboard"))
 
