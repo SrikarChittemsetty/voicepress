@@ -101,6 +101,24 @@ pytest -q
 
 Tests use a temporary SQLite database (`NEW_PROJECT_TEST_DB`) so the real `app.db` is not touched.
 
+## Persistent storage on Render
+
+Render’s **free** filesystem is **ephemeral**: redeploys and restarts can wipe files that are not on a [persistent disk](https://render.com/docs/disks). VoicePress keeps using SQLite, but you should put `app.db` on a disk that survives those events.
+
+1. In the Render dashboard, open your **Web Service** → **Disks** → add a **persistent disk**.
+2. Mount it to a path such as **`/var/data`** (create this mount path in the UI; it must exist on the instance for the mount).
+3. Set an environment variable so VoicePress writes the database **on that disk** (the file path’s parent should match the mount):
+
+   ```bash
+   DATABASE_PATH=/var/data/app.db
+   ```
+
+   The mount path (e.g. `/var/data`) must be the **parent directory** of the database file (`app.db` lives inside the mounted folder).
+
+4. Redeploy. On first boot, VoicePress creates missing parent directories and opens SQLite at `DATABASE_PATH`.
+
+**Path priority:** `NEW_PROJECT_TEST_DB` (tests only) overrides everything, then `DATABASE_PATH`, then the default `app.db` next to the project root.
+
 ## Configuration and Security Notes
 
 - Set `SECRET_KEY` in production. The fallback key is only for local development convenience.

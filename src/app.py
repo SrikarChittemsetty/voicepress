@@ -16,15 +16,28 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
 
 
 def get_database_path() -> Path:
-    """SQLite file path. Tests set NEW_PROJECT_TEST_DB to a temp file so the real app.db is untouched."""
+    """Resolve the SQLite database file path.
+
+    Priority:
+      1. NEW_PROJECT_TEST_DB — highest priority; tests point at a temp DB so the real file is untouched.
+      2. DATABASE_PATH — optional absolute path for production (e.g. Render persistent disk).
+      3. Default — ``app.db`` next to the repo root (parent of ``src/``).
+    """
     override = os.environ.get("NEW_PROJECT_TEST_DB")
     if override:
-        return Path(override)
+        return Path(override).expanduser().resolve()
+
+    configured = os.environ.get("DATABASE_PATH", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+
     return Path(__file__).resolve().parent.parent / "app.db"
 
 
 def get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(get_database_path()))
+    db_path = get_database_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     return conn
 
