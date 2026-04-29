@@ -2,6 +2,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+import logging
 import re
 from typing import Any
 
@@ -21,6 +22,7 @@ except ImportError:  # pragma: no cover - exercised only when optional productio
 app = Flask(__name__)
 # Use env SECRET_KEY when provided (production), otherwise a local-dev fallback.
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-change-me")
+logging.basicConfig(level=logging.INFO)
 
 
 class PostgresConnection:
@@ -444,6 +446,12 @@ def create_post(
     except Exception as error:
         if is_database_error(error):
             conn.rollback()
+            app.logger.exception(
+                "Post creation failed for user=%s title=%r database=%s",
+                username,
+                title,
+                "postgres" if is_postgres_connection(conn) else "sqlite",
+            )
             return False
         raise
     finally:
