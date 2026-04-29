@@ -59,10 +59,12 @@ def prepare_sql_for_postgres(sql: str) -> str:
 
 
 def uses_postgres() -> bool:
-    """Production uses Postgres when DATABASE_URL is set; tests keep their temp SQLite DB."""
-    return bool(os.environ.get("DATABASE_URL", "").strip()) and not os.environ.get(
-        "NEW_PROJECT_TEST_DB"
-    )
+    """Use Postgres only when DATABASE_URL is set and no SQLite override is present."""
+    if os.environ.get("NEW_PROJECT_TEST_DB"):
+        return False
+    if os.environ.get("DATABASE_PATH", "").strip():
+        return False
+    return bool(os.environ.get("DATABASE_URL", "").strip())
 
 
 def is_postgres_connection(conn: object) -> bool:

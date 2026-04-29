@@ -56,6 +56,19 @@ def test_new_project_test_db_keeps_tests_on_sqlite_even_with_database_url(tmp_pa
     assert m.get_database_path() == test_db.resolve()
 
 
+def test_database_path_keeps_sqlite_even_with_database_url(tmp_path, monkeypatch):
+    """Explicit DATABASE_PATH should keep SQLite selected on hosts that inject DATABASE_URL."""
+    db_file = tmp_path / "persistent" / "app.db"
+    monkeypatch.delenv("NEW_PROJECT_TEST_DB", raising=False)
+    monkeypatch.setenv("DATABASE_PATH", str(db_file))
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example.invalid/voicepress")
+
+    m = load_app_module()
+    assert m.uses_postgres() is False
+    assert m.get_database_path() == db_file.resolve()
+    assert db_file.exists()
+
+
 def test_postgres_sql_translation(tmp_path, monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("NEW_PROJECT_TEST_DB", str(tmp_path / "translation.sqlite"))
