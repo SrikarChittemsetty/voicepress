@@ -123,7 +123,9 @@ If you upgrade Render and add a persistent disk later, SQLite can also be made d
 
 4. Redeploy. On first boot, VoicePress creates missing parent directories and opens SQLite at `DATABASE_PATH`.
 
-**Storage priority:** `NEW_PROJECT_TEST_DB` (tests only) overrides everything, then `DATABASE_URL`, then `DATABASE_PATH`, then the default local `app.db` next to the project root.
+**Storage priority:** `NEW_PROJECT_TEST_DB` (tests only) overrides everything. Otherwise, if `DATABASE_PATH` is set, VoicePress uses **SQLite** at that path. If not, and `DATABASE_URL` is set, it uses **Postgres**. Otherwise it uses the default local `app.db` next to the project root.
+
+For **SQLite on Render**, use a **single Gunicorn worker** (`-w 1`) unless you are sure your host serializes writes; multiple workers plus SQLite often causes `database is locked` during creates. VoicePress enables WAL, a busy timeout, and brief retries on post creation to reduce lock errors, but one worker is still the safest setup.
 
 For Render deployment, set the build command to:
 

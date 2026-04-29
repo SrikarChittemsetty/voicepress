@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 import logging
@@ -126,14 +127,24 @@ def get_database_path() -> Path:
     return Path(__file__).resolve().parent.parent / "app.db"
 
 
+def _configure_sqlite_for_concurrency(conn: sqlite3.Connection) -> None:
+    """Cut down ``database is locked`` under concurrent requests (e.g. multiple Gunicorn workers)."""
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.Error:
+        pass
+    conn.execute("PRAGMA busy_timeout=30000")
+
+
 def get_db_connection() -> sqlite3.Connection | PostgresConnection:
     if uses_postgres():
         return PostgresConnection(os.environ["DATABASE_URL"].strip())
 
     db_path = get_database_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
+    _configure_sqlite_for_concurrency(conn)
     return conn
 
 
@@ -434,30 +445,67 @@ def create_post(
 
     created_at = datetime.now(timezone.utc).isoformat()
     slug = generate_slug(title)
-    conn = get_db_connection()
-    try:
-        conn.execute(
-            """
-            INSERT INTO posts (user_id, title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category, slug)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (user["id"], title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category, slug),
-        )
-        conn.commit()
-        return True
-    except Exception as error:
-        if is_database_error(error):
-            conn.rollback()
-            app.logger.exception(
-                "Post creation failed for user=%s title=%r database=%s",
-                username,
-                title,
-                "postgres" if is_postgres_connection(conn) else "sqlite",
+
+    max_attempts = 5 if not uses_postgres() else 1
+
+    for attempt in range(max_attempts):
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                """
+                INSERT INTO posts (user_id, title, body, excerpt, cover_image_url, created_at, visibility, status, tags, category, slug)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user["id"],
+                    title,
+                    body,
+                    excerpt,
+                    cover_image_url,
+                    created_at,
+                    visibility,
+                    status,
+                    tags,
+                    category,
+                    slug,
+                ),
             )
-            return False
-        raise
-    finally:
-        conn.close()
+            conn.commit()
+            return True
+        except Exception as error:
+            if is_postgres_connection(conn):
+                if is_database_error(error):
+                    conn.rollback()
+                    app.logger.exception(
+                        "Post creation failed for user=%s title=%r database=%s",
+                        username,
+                        title,
+                        "postgres",
+                    )
+                    return False
+                raise
+
+            locked = isinstance(error, sqlite3.OperationalError) and "locked" in str(error).lower()
+            if locked and attempt < max_attempts - 1:
+                try:
+                    conn.rollback()
+                except sqlite3.Error:
+                    pass
+                time.sleep(0.05 * (2**attempt))
+                continue
+
+            if is_database_error(error):
+                conn.rollback()
+                app.logger.exception(
+                    "Post creation failed for user=%s title=%r database=%s",
+                    username,
+                    title,
+                    "sqlite",
+                )
+                return False
+            raise
+        finally:
+            conn.close()
 
 
 DASHBOARD_POST_FILTERS = frozenset({"all", "published", "draft", "public", "private"})
